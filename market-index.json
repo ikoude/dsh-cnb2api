@@ -1,0 +1,52 @@
+{
+  "format": 1,
+  "title": {
+    "zh": "CNB2API 插件",
+    "en": "CNB2API plugins"
+  },
+  "plugins": [
+    {
+      "name": "dsh-cnb2api",
+      "title": {
+        "zh": "CNB2API",
+        "en": "CNB2API"
+      },
+      "description": {
+        "zh": "让 CNB 工作区里的 cnb2api 网关保持可用，并把它变成一个地址永不改变的 DSH 模型供应商。工作区地址每次重启都会变、被平台停止后不再响应，所以插件在后台跟随地址、并在停止后通过 CNB OpenAPI 重新启动（组织 AI credits 用尽时不启动，那时网关对每个请求都回 402）。插件在 127.0.0.1:41729（可改）提供固定基址的 OpenAI 兼容网关，把地址漂移、多账号选择与额度换人都藏在后面，并自动写入「设置 → 模型」的 CNB2API（路由 cnb-gateway）——协议层由 DSH 官方供应商实现，插件只发布配置。三个 agent 工具：cnb2api_status 查看工作区、cnb2api_start 启动它、cnb2api_quota 查所属组织的 AI credits 与核时。配置都在插件自己的页面上：状态面板显示每个账号的可用性与额度（含「冻结即预扣」的说明和余额警戒线提示），配置表单用令牌换下拉列表来选组织与仓库。令牌需要 repo-cnb-trigger:rw 与 account-engage:r，要显示额度再加 group-resource:r。监听 0.0.0.0 供局域网使用时必须有访问密钥，否则拒绝启动。关闭插件会移除工具、路由、面板与写入的供应商，网关停止监听；已在运行的工作区不受影响。",
+        "en": "Keeps a cnb2api gateway running inside your own CNB workspace reachable, and turns it into a DSH model provider whose address never changes. A workspace's address changes on every restart and the platform stops idle workspaces, so the plugin follows the address in the background and restarts a stopped workspace through the CNB OpenAPI — but not while the organisation's AI credits are used up, because the gateway would answer 402 anyway. The plugin serves a fixed-base OpenAI-compatible gateway on 127.0.0.1:41729 (configurable) that hides address drift, account selection and credit failover behind it, and publishes CNB2API (route cnb-gateway) into Settings → Models — the protocol layer is DSH's own provider, so the plugin only publishes configuration. Three agent tools: cnb2api_status reports the workspace, cnb2api_start starts it, and cnb2api_quota reads the organisation's AI credits and core-hours. Everything is configured on this plugin's own page: the status panel shows each account's availability and credit (explaining that frozen credit is pre-charged, plus an alert below the credit line), and the configuration form exchanges a token for drop-down organisations and repositories. The token needs repo-cnb-trigger:rw and account-engage:r, plus group-resource:r to show quota. Serving the LAN from 0.0.0.0 requires an access key; the gateway refuses to start without one. Turning the plugin off removes the tools, routes, panel and published provider, and stops the gateway; workspaces already running are left alone."
+      },
+      "author": "ikoude",
+      "homepage": "https://github.com/ikoude/dsh-cnb2api",
+      "repository": {
+        "url": "https://github.com/ikoude/dsh-cnb2api"
+      },
+      "metadata": {
+        "keywords": [
+          "dsh",
+          "dsh-plugin",
+          "deepseek-harness",
+          "cordis",
+          "plugin",
+          "cnb",
+          "cnb2api",
+          "workspace"
+        ],
+        "labels": []
+      },
+      "versions": [
+        {
+          "version": "0.9.8",
+          "publishTimestamp": 1795369436,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/ikoude/dsh-cnb2api",
+            "commit": "cda0d0cdbe97c17ca8cbf6b050de5b59badd7540"
+          },
+          "engines": {
+            "dsh": ">=0.2.2-rc.5"
+          }
+        }
+      ]
+    }
+  ]
+}
