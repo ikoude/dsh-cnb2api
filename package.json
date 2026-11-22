@@ -1,0 +1,63 @@
+{
+  "name": "dsh-cnb2api",
+  "version": "0.9.8",
+  "description": "Uses the cnb2api gateway in your own CNB workspace as a DSH model provider: follows the address that changes on every restart, restarts a stopped workspace, and shows its AI credits and core-hours.",
+  "license": "MIT",
+  "author": "ikoude",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./ui/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "ui/",
+    "lib/",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "docs",
+    "icon.svg",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.5"
+  },
+  "scripts": {
+    "test": "node --import ./test/resolve-dsh.mjs --test \"test/*.test.mjs\"",
+    "market:index": "node scripts/market-index.mjs"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis",
+    "plugin",
+    "cnb",
+    "cnb2api",
+    "workspace"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-plugin-manager"
+      ]
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ikoude/dsh-cnb2api.git"
+  },
+  "homepage": "https://github.com/ikoude/dsh-cnb2api",
+  "bugs": {
+    "url": "https://github.com/ikoude/dsh-cnb2api/issues"
+  }
+}

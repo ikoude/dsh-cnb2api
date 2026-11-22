@@ -1,0 +1,14 @@
+# One row: the workspace monitor, its tools and routes, the fixed-port gateway,
+# and the official provider config it publishes.
+#
+# Accounts are configured through the row's own form (Settings → Plugins →
+# CNB2API → Configure), which writes `accounts` here. Editing the file directly
+# works the same way:
+#
+#   accounts:
+#     - token: nk...        # CNB access token, CNB avatar → Access tokens
+#       repo: acme/gateway  # org/repo; the address and the account follow it
+#       proxyKey: sk-...    # that repository's .cnb.yml env PROXY_KEY
+- insert:
+    - id: cnb2api
+      name: 'dsh-cnb2api'

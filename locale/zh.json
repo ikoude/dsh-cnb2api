@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "CNB2API",
+    "description": "让 CNB 工作区里的 cnb2api 网关保持可用，并把它变成一个地址永不改变的 DSH 模型供应商。工作区地址每次重启都会变、被平台停止后不再响应，所以插件在后台跟随地址、并在停止后通过 CNB OpenAPI 重新启动（组织 AI credits 用尽时不启动，那时网关对每个请求都回 402）。插件在 127.0.0.1:41729（可改）提供固定基址的 OpenAI 兼容网关，把地址漂移、多账号选择与额度换人都藏在后面，并自动写入「设置 → 模型」的 CNB2API（路由 cnb-gateway）——协议层由 DSH 官方供应商实现，插件只发布配置。三个 agent 工具：cnb2api_status 查看工作区、cnb2api_start 启动它、cnb2api_quota 查所属组织的 AI credits 与核时。配置都在插件自己的页面上：状态面板显示每个账号的可用性与额度（含「冻结即预扣」的说明和余额警戒线提示），配置表单用令牌换下拉列表来选组织与仓库。令牌需要 repo-cnb-trigger:rw 与 account-engage:r，要显示额度再加 group-resource:r。监听 0.0.0.0 供局域网使用时必须有访问密钥，否则拒绝启动。关闭插件会移除工具、路由、面板与写入的供应商，网关停止监听；已在运行的工作区不受影响。",
+    "detail": "docs/DETAIL.zh.md"
+  }
+}

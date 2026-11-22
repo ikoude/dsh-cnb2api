@@ -1,0 +1,1 @@
+![The CNB2API plugin page: a status panel listing accounts with availability dots, state badges and credit bars — the active account highlighted with a consumption bar — beside a gateway card showing the base URL, LAN address and access key](preview.svg)
