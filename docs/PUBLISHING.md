@@ -66,7 +66,27 @@ gist raw 均可），用户在 **设置 → 插件市场 → 索引** 里添加�
 > 条目详情页（`docs/DETAIL.md` 与 `preview.svg`）由市场从**公开**仓库读取；
 > 私有仓库的详情图不会显示。
 
-## 5. 验证安装
+## 5. 上架公共市场（让所有人不用手动加索引）
+
+DSH 没有全局插件目录；「发现」页只搜索**用户自己配置的索引**。要让大家都能搜到，
+需要给公共索引的上游提交条目：
+
+- 公共索引：`realguan/dsh-plugin-market`（你本机已配置）
+- 条目来源：`awesome-dsh-plugin/awesome-dsh-plugin` 的 `data/plugins/<owner>__<repo>.yml`
+- 市场索引每天 03:17 UTC 从上游重建；GitHub Pages 地址约 10 分钟生效，jsDelivr 最长 12 小时
+
+投稿文件已备好：`contrib/ikoude__dsh-cnb2api.yml`（只提交这**一个**文件，不要改生成的 README）。
+
+提交前确认：
+
+- [ ] GitHub 仓库创建满 **1 天**（CI 自动检查，不足会被拒）
+- [ ] 仓库 Added topics 里加上 **`dsh-plugin`**
+- [ ] `package.json` 有 `dsh.bundle`（已有）
+- [ ] 描述与代码一致、不带营销词（已按此写）
+
+步骤：fork `awesome-dsh-plugin` → 把 contrib 里的文件放到 `data/plugins/` → 提 PR → 等 CI + 维护者审阅。
+
+## 6. 验证安装
 
 装完在 **插件** 页确认 `CNB2API` 这一行的开关已打开，然后：
 
