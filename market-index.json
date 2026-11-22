@@ -36,11 +36,9 @@
       "versions": [
         {
           "version": "0.9.8",
-          "publishTimestamp": 1795369436,
+          "publishTimestamp": 1795369445,
           "source": {
-            "type": "git",
-            "url": "https://github.com/ikoude/dsh-cnb2api",
-            "commit": "cda0d0cdbe97c17ca8cbf6b050de5b59badd7540"
+            "type": "npm"
           },
           "engines": {
             "dsh": ">=0.2.2-rc.5"
