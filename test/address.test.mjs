@@ -1,7 +1,7 @@
 // 地址与仓库：纯字符串变换。
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fillPort, findGatewayUrl, findGatewayUrlInLog, hostOf, maskHost, maskUrl, orgOf, parseRepo } from '../lib/address.mjs';
+import { fillPort, findGatewayUrl, findGatewayUrlInLog, hostOf, maskHost, maskUrl, parseRepo } from '../lib/address.mjs';
 
 test('模板端口会被替换成真实端口', () => {
   assert.equal(fillPort('https://abc-{{port}}.cnb.run', 9001), 'https://abc-9001.cnb.run');
@@ -62,9 +62,37 @@ test('仓库写法归一成 org/repo', () => {
   }
 });
 
-test('取组织名', () => {
-  assert.equal(orgOf('acme/gateway'), 'acme');
-  assert.equal(orgOf('acme/gateway/sub'), 'acme');
-  assert.equal(orgOf('gateway'), '');
-  assert.equal(orgOf(''), '');
+test('日志解析兼容：冒号写法、ANSI 颜色码、直接打印地址', () => {
+  // PROXY_URI: 冒号写法（仓库 .cnb.yml 被改过也认）
+  assert.equal(findGatewayUrlInLog('PROXY_URI: https://abc-{{port}}.cnb.run', 41729),
+    'https://abc-41729.cnb.run');
+  // PROXY_URI = 带空格
+  assert.equal(findGatewayUrlInLog('PROXY_URI = https://abc-{{port}}.cnb.run', 41729),
+    'https://abc-41729.cnb.run');
+  // 整行被终端颜色码包住
+  assert.equal(findGatewayUrlInLog('\u001b[32mPROXY_URI=https://abc-{{port}}.cnb.run\u001b[0m', 41729),
+    'https://abc-41729.cnb.run');
+  // 没有 PROXY_URI 前缀，日志里直接打印完整地址
+  assert.equal(findGatewayUrlInLog('访问地址 https://abc-41729.cnb.run 已就绪', 41729),
+    'https://abc-41729.cnb.run');
+  // 只打印裸主机名（没有协议）
+  assert.equal(findGatewayUrlInLog('gateway at abc-{{port}}.cnb.run', 41729),
+    'https://abc-41729.cnb.run');
+  // 多处出现时取最后一条（热重启）
+  const two = 'https://old111-41729.cnb.run\n...\nhttps://new222-41729.cnb.run';
+  assert.equal(findGatewayUrlInLog(two, 41729), 'https://new222-41729.cnb.run');
+});
+
+test('日志地址解析边界：PROXY_URI 带路径/尾字符时不污染基址', () => {
+  // 带 /v1 路径：只取主机名，不能把 /v1 带进基址（否则上游会拼成 /v1/v1/models）
+  assert.equal(findGatewayUrlInLog('PROXY_URI=https://foo-9001.cnb.run/v1', 9001),
+    'https://foo-9001.cnb.run');
+  // 尾部杂字符 ']'：GATEWAY_HOST 的负向前瞻允许 ']'，必须靠取命中主机名来规避
+  assert.equal(findGatewayUrlInLog('PROXY_URI=https://br-9001.cnb.run]', 9001),
+    'https://br-9001.cnb.run');
+});
+
+test('fillPort 端口缺省时不写出 undefined 主机名', () => {
+  assert.equal(fillPort('https://x-{{port}}.cnb.run'), 'https://x-{{port}}.cnb.run');
+  assert.equal(fillPort('https://x-{{port}}.cnb.run', 9001), 'https://x-9001.cnb.run');
 });

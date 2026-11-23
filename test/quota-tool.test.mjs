@@ -28,29 +28,14 @@ function mount(initial) {
   }
   const routes = [];
   const tools = new Map();
-  const registered = [];
   const ctx = {
   tools: { register: (tool) => tools.set(tool.name, tool) },
   webServer: { register: (route) => { routes.push(route); return () => {}; } },
-  // llm 服务桩：只记录注册，测试关心的是"有没有把供应商挂上去"
-  llm: { registerAdapter: (providers, adapter) => { registered.push({ providers, adapter }); return () => {}; } },
-  // ctx.inject 在真 DSH 里等到服务就绪再执行；测试里服务视为已就绪
-  inject: (deps, cb) => { cb(ctx); },
   get: () => undefined,
   effect: (fn) => { fn(); return () => {}; },
   };
   plugin.apply(ctx, config);
   return { tools, routes, route: (path) => routes.find((row) => row.path === path) };
-}
-
-const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
-
-function call(route, { url = '/', method = 'GET' } = {}) {
-  return new Promise((resolve) => {
-    route.handler({
-      url, method, headers: {}, async *[Symbol.asyncIterator]() {},
-    }, { writeHead() {}, end(text) { resolve(text ? JSON.parse(text) : null); } });
-  });
 }
 
 test('额度工具：报出可用与总量，且不读一分钟前的缓存', async () => {

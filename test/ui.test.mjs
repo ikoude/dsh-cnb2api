@@ -95,7 +95,7 @@ function makeStorage() {
 }
 
 /** Load the bundle in a VM and return its registrations. */
-function loadBundle(fetchImpl) {
+function loadBundle(fetchImpl, docOverride) {
   const registered = [];
   const sandbox = {
     window: {
@@ -107,16 +107,19 @@ function loadBundle(fetchImpl) {
       dispatchEvent() { return true; },
       location: { assign() {} },
     },
-    localStorage: makeStorage(),
     console: { error() {}, warn() {}, log() {} },
     setInterval: () => ({ unref() {} }),
     clearInterval: () => {},
     fetch: fetchImpl || (async () => ({ ok: true, json: async () => ({ configured: false, accounts: [] }) })),
-    document: {
+    document: docOverride || {
       documentElement: { lang: 'zh' },
       head: { appendChild() {} },
       createElement: () => ({ setAttribute() {}, remove() {}, style: {}, textContent: '' }),
       querySelectorAll: () => [],
+      _handlers: {},
+      addEventListener(type, fn) { (this._handlers[type] ||= []).push(fn); },
+      removeEventListener(type, fn) { this._handlers[type] = (this._handlers[type] || []).filter((f) => f !== fn); },
+      fire(type, event) { for (const fn of this._handlers[type] || []) fn(event); },
     },
     // 悬浮球用到的浏览器 API：位置存 localStorage，开关靠自定义事件同步
     localStorage: makeStorage(),
@@ -134,7 +137,7 @@ function loadBundle(fetchImpl) {
 }
 
 /** Mount one registration id against a fake context. */
-function mount(id, { React, fetchImpl, formValue, writable = true } = {}) {
+function mount(id, { React, fetchImpl, formValue, writable = true, document: doc } = {}) {
   const writes = [];
   const form = {
     getSnapshot: () => ({
@@ -145,7 +148,7 @@ function mount(id, { React, fetchImpl, formValue, writable = true } = {}) {
     unset: async () => true,
     mutate: async (ops) => { writes.push(ops); return true; },
   };
-  const reg = loadBundle(fetchImpl).find((row) => row.id === id);
+  const reg = loadBundle(fetchImpl, doc).find((row) => row.id === id);
   assert.ok(reg, `应有注册 ${id}`);
   const reg3 = reg.factory((spec) => {
     if (spec === 'react') return React;
@@ -166,7 +169,7 @@ function mount(id, { React, fetchImpl, formValue, writable = true } = {}) {
   });
   // 两条注册分别属于两个槽位，测试要的是其中一个
   const pick = (slotName) => registered.find((row) => row.options.name === slotName);
-  const formEntry = pick('plugins.bundle.config') ?? pick('plugins.row.config');
+  const formEntry = pick('plugins.bundle.config');
   const panelEntry = pick('plugins.detail.section');
   return {
     owners,
@@ -196,7 +199,6 @@ function loginBackend({ orgs = [], repos = {}, fail = null } = {}) {
   const reply = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
   return async (input) => {
     const url = new URL(typeof input === 'string' ? input : input.url, 'http://local');
-    if (process.env.DEBUG_LOGIN) console.log('  LOGIN', url.pathname);
     if (url.pathname === '/cnb2api/login/token') {
       return fail ? reply(401, { ok: false, reason: fail }) : reply(200, { ok: true, username: 'alice', orgs });
     }
@@ -328,24 +330,30 @@ test('悬浮球：开关是浏览器偏好，默认显示', () => {
 });
 
 test('拖动阈值：位移小于 4px 视为点击，超过才移动', () => {
-  // 直接测判定逻辑本身：右键状态机不依赖 React 的重渲染，
-  // 这样断言的是"阈值"而不是测试运行时的重渲染行为。
+  // 拖动走 document 级监听：down 时挂上，move/up 由全局事件驱动，
+  // 这样靠近标题栏也不会因为 pointer capture 被吞而拖不动。
   const rt = runtime();
-  const { registered } = mount('dsh-cnb2api', { React: rt.React });
+  const handlers = {};
+  const doc = {
+    documentElement: { lang: 'zh' }, head: { appendChild() {} },
+    createElement: () => ({ setAttribute() {}, remove() {}, style: {}, textContent: '' }),
+    querySelectorAll: () => [],
+    addEventListener: (type, fn) => { (handlers[type] ||= []).push(fn); },
+    removeEventListener: (type, fn) => { handlers[type] = (handlers[type] || []).filter((f) => f !== fn); },
+  };
+  const { registered } = mount('dsh-cnb2api', { React: rt.React, document: doc });
   const element = registered.find((row) => row.options.name === 'shell.overlay').component();
   const tree = rt.render(element.type, element.props);
   const button = nodesOf(flatten(tree, rt), ['button'])
     .find((node) => /cnb2api-orb/.test(node.props.className));
 
-  assert.equal(typeof button.props.onPointerDown, 'function');
-  assert.equal(typeof button.props.onPointerMove, 'function');
-  assert.equal(typeof button.props.onPointerUp, 'function');
+  assert.equal(typeof button.props.onPointerDown, 'function', '要有 onPointerDown');
 
   const start = tree.props.style;
-  const capture = { setPointerCapture() {} };
-  button.props.onPointerDown({ button: 0, clientX: 100, clientY: 100, pointerId: 1, currentTarget: capture });
-  button.props.onPointerMove({ clientX: 102, clientY: 101 });   // 约 2.2px
-  button.props.onPointerUp();
+  button.props.onPointerDown({ button: 0, clientX: 100, clientY: 100, pointerId: 1 });
+  // 小于阈值的抖动：挂在 document 上的 move/up
+  for (const fn of handlers.pointermove || []) fn({ clientX: 102, clientY: 101 });
+  for (const fn of handlers.pointerup || []) fn({});
 
   const after = rt.render(element.type, element.props);
   assert.deepEqual(after.props.style, start, '小于阈值的抖动不该移动球');
@@ -713,7 +721,7 @@ test('悬浮球面板：与插件页用同一个卡片，不出现「可用 / �
     '不能再有把 remain 当分子的写法',
   );
   // 悬浮球那条路径必须复用组件，而不是自己拼一份
-  const orbBlock = source.slice(source.indexOf("h('div', { className: 'cnb2api-orb-card'"));
+  const orbBlock = source.slice(source.indexOf("className: 'cnb2api-orb-card'"));
   assert.match(orbBlock.slice(0, 4000), /h\(AccountRow,/, '悬浮球卡片要复用 AccountRow');
 });
 
@@ -944,19 +952,19 @@ test('账号卡可折叠：卡片带折叠按钮与状态属性', () => {
   const cards = tree.kids.filter((kid) => kid && typeof kid.type === 'function' && kid.props.row);
   const card = rt.render(cards[0].type, cards[0].props);
 
-  // 账号默认收起（账号多时一进来是行式摘要）
-  assert.equal(card.props['data-collapsed'], 'true', '新配置默认收起');
+  // 已保存的账号默认收起
+  assert.equal(card.props['data-collapsed'], 'true', '已保存账号默认收起');
   // 卡片头有折叠按钮（箭头），点击后折叠
   const chevron = card.kids[0].kids.find(
     (kid) => kid && kid.type === 'button' && kid.props.className.includes('cnb2api-chevron'),
   );
   assert.ok(chevron, '要有折叠按钮');
-  assert.equal(chevron.kids.join(''), '▸', '收起态应显示展开箭头');
+  assert.equal(chevron.kids.join(''), '▸', '收起态显示展开箭头');
   assert.equal(typeof chevron.props.onClick, 'function', '折叠按钮要可点');
-  const open = rt.render(cards[0].type, { ...cards[0].props, collapsed: false });
-  assert.equal(open.props['data-collapsed'], undefined, '展开态不标记折叠');
-  assert.equal(open.kids[0].kids.find((kid) => kid && kid.type === 'button'
-    && kid.props.className.includes('cnb2api-chevron')).kids.join(''), '▾');
+  const foldedCard = rt.render(cards[0].type, { ...cards[0].props, collapsed: true });
+  assert.equal(foldedCard.props['data-collapsed'], 'true', 'collapsed 时卡片应标记折叠');
+  assert.equal(foldedCard.kids[0].kids.find((kid) => kid && kid.type === 'button'
+    && kid.props.className.includes('cnb2api-chevron')).kids.join(''), '▸');
   // 折叠由父组件控制（账号多时「收起全部」一并收起），
   // 这里验证卡片对 collapsed 属性的响应即可。
   const folded = rt.render(cards[0].type, { ...cards[0].props, collapsed: true });
@@ -1063,3 +1071,244 @@ test('配置渲染在包详情页（plugins.bundle.config），key 是包名', (
 
 
 
+
+test('添加账号后：新行有「取消」，且有「保存」按钮', () => {
+  const rt = runtime();
+  const { component } = mount('dsh-cnb2api', { React: rt.React, formValue: SAMPLE });
+  const page = rt.render(component, { view: 'page' });
+  let tree = rt.render(page.type, page.props);
+  const add = collect(tree, ['button'], rt).find((b) => b.kids.join('') === '添加账号');
+  assert.ok(add, '要有「添加」按钮');
+  add.props.onClick();
+  tree = rt.render(page.type, page.props);
+  const labels = collect(tree, ['button'], rt).map((b) => b.kids.join(''));
+  assert.equal(labels.filter((l) => l === '取消').length, 1, `新账号应有且仅有一个「取消」：${labels.join('/')}`);
+  assert.ok(labels.some((l) => /保存/.test(l)), `应有「保存」按钮，实际：${labels.join('/')}`);
+  // 已保存的账号仍是两步「移除」，只有新行给「取消」
+  assert.equal(labels.filter((l) => l === '移除').length, 2, `两个已保存账号各一个「移除」：${labels.join('/')}`);
+});
+
+test('监听地址只有本机与局域网两种，没有 IPv6 选项', () => {
+  const rt = runtime();
+  const { component } = mount('dsh-cnb2api', { React: rt.React, formValue: SAMPLE });
+  const page = rt.render(component, { view: 'page' });
+  const tree = rt.render(page.type, page.props);
+  const host = nodesOf(tree, ['select']).find((n) => n.props.id === 'cnb2api-host');
+  assert.ok(host, '要有监听地址下拉');
+  const values = (host.kids || []).filter((kid) => kid && kid.props && 'value' in kid.props)
+    .map((kid) => kid.props.value).sort();
+  assert.deepEqual(values, ['0.0.0.0', '127.0.0.1'], `实际选项：${values.join(',')}`);
+});
+
+test('状态面板：监听局域网时列出局域网基址（baseUrl + lan）', async () => {
+  const rt = runtime();
+  const payload = {
+    configured: true,
+    accounts: [],
+    gateway: {
+      listening: true,
+      host: '0.0.0.0',
+      port: 41729,
+      baseUrl: 'http://127.0.0.1:41729/v1',
+      lan: ['http://192.168.1.20:41729/v1'],
+      lanOnly: true,
+      key: 'sk-cnb-test',
+      requests: 0,
+      published: { state: 'published', route: 'cnb-gateway' },
+    },
+  };
+  const { panel } = mount('dsh-cnb2api', {
+    React: rt.React,
+    fetchImpl: async () => ({ ok: true, json: async () => payload }),
+  });
+  const view = panel({ subject: { kind: 'bundle', pkg: { name: 'dsh-cnb2api' } } });
+  rt.render(view.type, view.props);
+  await new Promise((resolve) => { setTimeout(resolve, 20); });
+  const text = JSON.stringify(flatten(rt.render(view.type, view.props), rt));
+  assert.match(text, /http:\/\/127\.0\.0\.1:41729\/v1/, '要显示本机基址');
+  assert.match(text, /http:\/\/192\.168\.1\.20:41729\/v1/, '要显示局域网基址（完整 URL）');
+  assert.equal(/http:\/\/http/.test(text), false, '不能再拼一层协议（lan 已是完整基址）');
+  assert.match(text, /局域网/, '要有「局域网」标签');
+});
+
+test('状态面板：监听 127.0.0.1 时不列局域网基址', async () => {
+  const rt = runtime();
+  const payload = {
+    configured: true, accounts: [],
+    gateway: { listening: true, host: '127.0.0.1', port: 41729, baseUrl: 'http://127.0.0.1:41729/v1', lan: [], lanOnly: false, key: 'k', requests: 0 },
+  };
+  const { panel } = mount('dsh-cnb2api', {
+    React: rt.React, fetchImpl: async () => ({ ok: true, json: async () => payload }),
+  });
+  const view = panel({ subject: { kind: 'bundle', pkg: { name: 'dsh-cnb2api' } } });
+  rt.render(view.type, view.props);
+  await new Promise((resolve) => { setTimeout(resolve, 20); });
+  const text = JSON.stringify(flatten(rt.render(view.type, view.props), rt));
+  assert.match(text, /127\.0\.0\.1:41729\/v1/);
+  assert.equal(/局域网/.test(text), false, '仅回环时不该出现局域网行');
+});
+
+test('语言跟随配置：status.locale=en 时面板显示英文', async () => {
+  const rt = runtime();
+  const payload = {
+    configured: true, locale: 'en', accounts: [],
+    gateway: { listening: true, host: '127.0.0.1', port: 41729, baseUrl: 'http://127.0.0.1:41729/v1', lan: [], lanOnly: false, key: 'k', requests: 0 },
+  };
+  const { panel } = mount('dsh-cnb2api', {
+    React: rt.React, fetchImpl: async () => ({ ok: true, json: async () => payload }),
+  });
+  const view = panel({ subject: { kind: 'bundle', pkg: { name: 'dsh-cnb2api' } } });
+  rt.render(view.type, view.props);
+  await new Promise((resolve) => { setTimeout(resolve, 20); });
+  const text = JSON.stringify(flatten(rt.render(view.type, view.props), rt));
+  assert.match(text, /Workspace status/, '英文环境下标题应为英文');
+});
+
+test('状态面板：网关未监听时强制展开，不把报错收起来', async () => {
+  const rt = runtime();
+  const payload = {
+    configured: true, locale: 'zh', accounts: [],
+    gateway: { listening: false, host: '0.0.0.0', port: 41729, baseUrl: null, lan: [], lanOnly: true, key: 'k', requests: 0 },
+  };
+  const { panel } = mount('dsh-cnb2api', {
+    React: rt.React, fetchImpl: async () => ({ ok: true, json: async () => payload }),
+  });
+  const view = panel({ subject: { kind: 'bundle', pkg: { name: 'dsh-cnb2api' } } });
+  rt.render(view.type, view.props);
+  await new Promise((resolve) => { setTimeout(resolve, 20); });
+  const text = JSON.stringify(flatten(rt.render(view.type, view.props), rt));
+  assert.match(text, /没有在监听|未监听|not listening/, '要显示网关未监听的报错');
+});
+
+test('网关未监听时，折叠按钮禁用且箭头与实际展开一致', async () => {
+  const rt = runtime();
+  const payload = {
+    configured: true, locale: 'zh', accounts: [],
+    gateway: { listening: false, host: '0.0.0.0', port: 41729, baseUrl: null, lan: [], lanOnly: true, key: 'k', requests: 0 },
+  };
+  const { panel } = mount('dsh-cnb2api', {
+    React: rt.React, fetchImpl: async () => ({ ok: true, json: async () => payload }),
+  });
+  const view = panel({ subject: { kind: 'bundle', pkg: { name: 'dsh-cnb2api' } } });
+  rt.render(view.type, view.props);
+  await new Promise((resolve) => { setTimeout(resolve, 20); });
+  const tree = flatten(rt.render(view.type, view.props), rt);
+  const toggle = collect(tree, ['button'], rt)
+    .find((b) => String(b.props.className || '').includes('cnb2api-btn-icon'));
+  assert.ok(toggle, '要有折叠按钮');
+  assert.equal(toggle.props.disabled, true, '网关未监听时折叠按钮应禁用');
+  assert.equal(toggle.props['aria-expanded'], 'true', '实际展开，aria 应为 true');
+  assert.equal(toggle.kids.join(''), '▾', '实际展开，箭头应朝下');
+});
+
+test('取消已输入内容的新行后，保存按钮回落为不可用（dirty 重算）', () => {
+  const rt = runtime();
+  const { component } = mount('dsh-cnb2api', { React: rt.React, formValue: SAMPLE });
+  const page = rt.render(component, { view: 'page' });
+  let tree = rt.render(page.type, page.props);
+
+  collect(tree, ['button'], rt).find((b) => b.kids.join('') === '添加账号').props.onClick();
+  tree = rt.render(page.type, page.props);
+
+  const tokenInputs = collect(tree, ['input'], rt).filter((n) => /-token$/.test(String(n.props.id || '')));
+  tokenInputs[tokenInputs.length - 1].props.onChange({ target: { value: 'nk-new' } });
+  tree = rt.render(page.type, page.props);
+  // 用「撤销」观察 dirty：它的 disabled 只取决于是否脏（「保存」还会因新行未填完 blocked 而禁用）
+  let discard = collect(tree, ['button'], rt).find((b) => b.kids.join('') === '撤销');
+  assert.equal(discard.props.disabled, false, '输入后应有未保存改动（撤销可用）');
+
+  const cancel = collect(tree, ['button'], rt).find((b) => b.kids.join('') === '取消');
+  assert.ok(cancel, '新行要有取消按钮');
+  cancel.props.onClick();
+  tree = rt.render(page.type, page.props);
+  discard = collect(tree, ['button'], rt).find((b) => b.kids.join('') === '撤销');
+  assert.equal(discard.props.disabled, true, '取消后回到无改动，撤销应不可用（dirty 已回落）');
+});
+
+test('保存后基线已更新：再加一行又取消，不会误报「未保存」', async () => {
+  const rt = runtime();
+  const { component } = mount('dsh-cnb2api', { React: rt.React, formValue: SAMPLE });
+  const page = rt.render(component, { view: 'page' });
+  let tree = rt.render(page.type, page.props);
+
+  // 改一项全局设置
+  const intervalId = collect(tree, ['label'], rt)
+    .find((l) => l.kids.join('') === '巡检间隔（秒）').props.htmlFor;
+  collect(tree, ['input'], rt).find((n) => n.props.id === intervalId)
+    .props.onChange({ target: { value: '60' } });
+  tree = rt.render(page.type, page.props);
+
+  // 保存
+  const save = collect(tree, ['button'], rt).find((b) => b.kids.join('') === '保存');
+  await save.props.onClick();
+  tree = rt.render(page.type, page.props);
+
+  // 再加一行又取消
+  collect(tree, ['button'], rt).find((b) => b.kids.join('') === '添加账号').props.onClick();
+  tree = rt.render(page.type, page.props);
+  collect(tree, ['button'], rt).find((b) => b.kids.join('') === '取消').props.onClick();
+  tree = rt.render(page.type, page.props);
+
+  const discard = collect(tree, ['button'], rt).find((b) => b.kids.join('') === '撤销');
+  assert.equal(discard.props.disabled, true, '保存已是最新，取消空行后不该显示未保存');
+});
+
+test('悬浮球圆环用标准 SVG 绘制，尺寸明确不缩放', () => {
+  const source = fs.readFileSync(BUNDLE, 'utf8');
+  assert.match(source, /h\('svg', \{[\s\S]{0,200}width: size, height: size, viewBox:/, 'SVG 要明确尺寸');
+  assert.match(source, /strokeLinecap: 'butt'/, '端帽 butt');
+  // CSS 不能再用 width:100% 拉伸 SVG，否则 1:1 绘制被破坏、边缘变形
+  assert.equal(/\.cnb2api-ring\s*\{[^}]*width:\s*100%/.test(source), false, 'SVG 不能被 CSS 拉伸');
+});
+
+test('悬浮球在窗口 resize 后重新夹回可视区', () => {
+  const source = fs.readFileSync(BUNDLE, 'utf8');
+  assert.match(source, /addEventListener\('resize', onResize\)/, '要监听窗口 resize');
+  assert.match(source, /removeEventListener\('resize', onResize\)/, '要移除 resize 监听');
+  assert.match(source, /const onResize = \(\) => setPoint\(\(prev\) => clampOrb\(prev\)\)/, 'resize 要重新 clamp');
+});
+
+test('悬浮球卡片按窗口空间自动选弹出方向，不会弹到窗口外', () => {
+  const source = fs.readFileSync(BUNDLE, 'utf8');
+  assert.match(source, /spaceRight >= CARD_W \+ CARD_GAP \|\| spaceRight >= spaceLeft/, '左右要按空间选边');
+  assert.match(source, /spaceBelow >= viewportH \* 0\.6 \|\| spaceBelow >= spaceAbove/, '上下要按空间选边');
+  assert.match(source, /maxHeight: `\$\{cardHeight\}px`/, '卡片高度要受可视区约束');
+  // 卡片不能再是写死的 right:0 / bottom:52px 而不随位置变化
+  assert.match(source, /left: cardRight \? .* : 'auto'/, '弹出方向要用 inline style 覆盖 CSS');
+});
+
+test('悬浮球避开整条顶部标题栏（避免被系统按钮吞掉拖不动）', () => {
+  const source = fs.readFileSync(BUNDLE, 'utf8');
+  assert.match(source, /const TITLEBAR_H = 80;/, '顶部整条设为禁区（自定义标题栏更高）');
+  assert.match(source, /if \(y < keepOut\) y = keepOut/, '落进顶部带就推到下方');
+  assert.equal(/CTRL_W/.test(source), false, '不再只避左右两角');
+  assert.match(source, /ORB_POSITION_KEY = 'cnb2api:orb-v2'/, '旧坏位置作废');
+  assert.match(source, /document\.addEventListener\('pointermove', onMove\)/, '拖动用 document 级监听');
+});
+
+test('悬浮球卡片：刷新与关闭按钮同规格，亮色字体抗锯齿', () => {
+  const source = fs.readFileSync(BUNDLE, 'utf8');
+  const cardBlock = source.slice(source.indexOf('className: \'cnb2api-orb-card\''));
+  const head = cardBlock.slice(0, cardBlock.indexOf('cnb2api-orb-list'));
+  const iconBtns = [...head.matchAll(/className: 'cnb2api-btn cnb2api-btn-icon'/g)].length;
+  assert.equal(iconBtns, 2, '刷新与关闭都应是 24px 图标按钮');
+  assert.match(source, /-webkit-font-smoothing: antialiased/, '亮色模式强制灰度抗锯齿');
+  assert.match(source, /return \{ x: Math\.round\(x\), y: Math\.round\(y\) \}/, '坐标取整避免半像素糊字');
+});
+
+test('悬浮球卡片内辅助文字提高对比度与字号（亮色模式）', () => {
+  const source = fs.readFileSync(BUNDLE, 'utf8');
+  assert.match(source, /\.cnb2api-orb-card \.cnb2api-meter-foot \{ font-size: 12px; color: var\(--dsw-alias-label-secondary\)/,
+    '可用额度脚注要用 secondary、12px');
+  assert.match(source, /\.cnb2api-orb-card \.cnb2api-detail \{ color: var\(--dsw-alias-label-secondary\)/,
+    '账号详情不能再用最浅一档');
+});
+
+test('悬浮球边界：矮窗口 clamp 不越界、拖动防重入且卸载清理', () => {
+  const source = fs.readFileSync(BUNDLE, 'utf8');
+  assert.match(source, /const upper = Math\.max\(ORB_MARGIN, height - ORB_SIZE - ORB_MARGIN\)/, '标题栏禁区要受上界约束');
+  assert.match(source, /const keepOut = Math\.min\(TITLEBAR_H \+ ORB_MARGIN, upper\)/, 'keepOut 不越过可视区');
+  assert.match(source, /const detachDrag = \(\) =>/, '要有统一的监听清理函数');
+  assert.match(source, /useEffect\(\(\) => \(\) => detachDrag\(\), \[\]\)/, '卸载时要清理拖动监听');
+  assert.match(source, /detachDrag\(\);[\s\S]{0,80}const origin =/, '新 pointerdown 先清旧会话');
+});

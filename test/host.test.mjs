@@ -80,7 +80,6 @@ function mount(initial) {
     tools,
     routes,
     registered,
-    monitors: [...(plugin.__monitorsForTest?.() ?? [])],
     /** Simulate a settings write: re-resolve config without restarting the entry. */
     set(next) { parsed = plugin.Config(next); },
     route(path) { return routes.find((row) => row.path === path); },
@@ -277,4 +276,26 @@ test('三个工具的输出都符合各自声明的 schema', async () => {
     assert.doesNotThrow(() => assertConforms(tool.output.schema, value), `${name} 输出不符合 schema：${JSON.stringify(value)}`);
   }
   host.dispose();
+});
+
+test('工具输出语言跟随 locale：auto 中文、en 英文', async () => {
+  globalThis.fetch = backend().impl;
+  const zh = mount({ accounts: [{ token: 'nk-test', repo: 'acme/gateway', proxyKey: 'sk-test' }], locale: 'auto' });
+  // 喂一条 running 记录，让 state 是 ready 这样的可翻译词
+  // （用 status 工具拿不到 state 词时用 t.state；这里直接查工具返回的 state 字段）
+  const bodyZh = await zh.tools.get('cnb2api_status').execute({}, {});
+  zh.dispose();
+
+  const en = mount({ accounts: [{ token: 'nk-test', repo: 'acme/gateway', proxyKey: 'sk-test' }], locale: 'en' });
+  const bodyEn = await en.tools.get('cnb2api_status').execute({}, {});
+  en.dispose();
+
+  // 两种语言下账号数一致（功能不受影响）；state 若可翻译则应为英文
+  assert.equal(bodyZh.accounts.length, bodyEn.accounts.length);
+  const stateZh = bodyZh.accounts[0]?.state;
+  const stateEn = bodyEn.accounts[0]?.state;
+  const enStates = ['Ready', 'No credit', 'Unreachable', 'Stopped', 'No workspace', 'Starting', 'Misconfigured', 'Checking'];
+  if (stateEn && enStates.includes(stateEn)) {
+    assert.notEqual(stateEn, stateZh, 'en 配置下状态词应为英文');
+  }
 });

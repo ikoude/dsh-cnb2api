@@ -22,7 +22,7 @@
 | 工具 | `cnb2api_status` 看状态 · `cnb2api_start` 启动 · `cnb2api_quota` 查额度 |
 | 路由 | `GET /cnb2api/status` · `POST /cnb2api/start` |
 | 登录路由 | `POST /cnb2api/login/{token,orgs,repos,proxy-key}` —— 把令牌换成下拉选项、验证 PROXY_KEY |
-| 界面 | **悬浮球**（可拖动、可关）+ **插件详情页**里的状态面板（含额度进度条）+ 行上的配置表单 |
+| 界面 | **悬浮球**（可拖动、可关）+ **插件详情页**里的状态面板（含额度进度条）与配置表单 |
 
 界面不占对话区：**悬浮球**浮在窗口角落，详细的**状态面板**在
 **设置 → 插件 → CNB2API** 里。工作区状态是「需要时去看」的东西，不该在每个会话里常驻一行。
@@ -70,7 +70,7 @@
 
 ## 2. 配置
 
-点开这一行的 **配置**，每个账号按四步走：
+在 **设置 → 插件 → CNB2API → 详情页** 里配置，每个账号按四步走：
 
 ```
 ① CNB 访问令牌      粘贴后点「验证并登录」
@@ -124,7 +124,7 @@
 | `lowCreditPercent` | 5 | 余额**警戒线**（%），低于此值时提示，账号照常用 |
 | `creditFloorPercent` | 1 | 余额**保底线**（%），低于此值时**停止使用**该账号；0 表示不设保底 |
 | `lowCreditMessage` | 空 | 提示文案模板，留空用默认句子 |
-| `locale` | `auto` | 面板语言 |
+| `locale` | `auto` | 界面语言（auto 跟随浏览器）；工具输出 auto 用中文、显式 en 用英文 |
 | `apiBase` | `https://api.cnb.cool` | CNB OpenAPI 基址（一般不用改，仅在 cordis.patch.yml 里） |
 
 ### 警戒线与保底线（两件事）
@@ -336,7 +336,7 @@ x-cnb2api-credit-low:    1        ← 低于警戒线
 ## 8. 开发
 
 ```bash
-npm test      # 205 个用例，按层分组
+npm test      # 231 个用例，按层分组
 ```
 
 代码按层分开，每层只依赖下一层：

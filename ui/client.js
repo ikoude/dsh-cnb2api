@@ -1,10 +1,11 @@
 /**
  * dsh-cnb2api — browser half.
  *
- * Two registrations, both living on the Plugins page rather than in the chat:
+ * Three registrations, all on the Plugins page rather than in the chat:
  *
- *   plugins.detail.section   the workspace panel, below the bundle's own page
- *   plugins.row.config       the configuration form, opened from the bundle row
+ *   plugins.bundle.config    the configuration form, on the plugin's own detail page
+ *   plugins.detail.section   the workspace status panel, below that page
+ *   shell.overlay            the draggable floating ball (per-browser toggle)
  *
  * Nothing renders in the conversation area: workspace state is something you go
  * and look at, not a permanent row under every message.
@@ -29,17 +30,15 @@ window.__ModuleLoader__.load({
     const ZH = {
       orb: {
         used: '已用',
-        hide: '隐藏',
         close: '收起',
         openDetails: '打开插件页',
       },
       panel: {
         title: '工作区状态',
-        empty: '尚未配置账号 · 在这个插件行的「配置」里填写 CNB 访问令牌与组织/仓库',
+        empty: '尚未配置账号 · 在「设置 → 插件 → CNB2API」的详情页里填写 CNB 访问令牌与组织/仓库',
         loading: '读取中…',
         failed: '读不到状态',
         stale: '上次读数',
-        retry: '重试',
         refresh: '刷新',
         start: '启动',
         starting: '启动中…',
@@ -51,7 +50,6 @@ window.__ModuleLoader__.load({
         frozenHint: '预扣：已从额度中扣除，停止工作区后计入已用，不返还',
         credits: 'AI credits',
         coreHours: '核时',
-        checked: '上次检查',
         activeAccount: '当前',
         usable: '可用',
         unusable: '不可用',
@@ -60,6 +58,8 @@ window.__ModuleLoader__.load({
         lowCredit: '额度即将耗尽 · 请补额度',
         noneUsable: '没有账号能接住请求 · 补足额度或修好令牌',
         gateway: '网关',
+        accountsUnit: '个账号',
+        usableUnit: '个可用',
         gatewayBase: '基址',
         gatewayLan: '局域网',
         gatewayKey: '访问密钥',
@@ -85,11 +85,12 @@ window.__ModuleLoader__.load({
         orb: '显示悬浮球',
         orbHint: '在窗口角落显示一个可拖动的圆球，显示总额度使用比例',
         intervalHint: '最少 30 秒；越短越及时，也越费 CNB 接口',
-        localeHint: '只影响插件自己的界面文案',
-        intro: '每个账号是一个 CNB 用户加一个组织/仓库。先验证令牌，组织与仓库都从列表里选 —— 手填的组织名或仓库名不会报错，只会接到别的工作区去。',
+        localeHint: '影响插件界面与 agent 工具输出的语言',
         empty: '还没有账号。点「添加账号」，先粘贴令牌并点「验证并登录」，再从列表里选组织与仓库，填好 PROXY_KEY，最后按「保存」。',
         add: '添加账号',
+        intro: '每个账号是一个 CNB 用户加一个组织/仓库。先验证令牌，组织与仓库都从列表里选 —— 手填的组织名或仓库名不会报错，只会接到别的工作区去。',
         remove: '移除',
+        cancelAdd: '取消',
         removeConfirm: '确认移除',
         removeNote: '保存后才会删掉',
         cancel: '取消',
@@ -126,7 +127,6 @@ window.__ModuleLoader__.load({
         portHint: '留空则用下面的全局端口',
         show: '显示',
         hide: '隐藏',
-        openConfigure: '配置账号',
         keyCheck: '验证密钥',
         keyChecking: '验证中…',
         keyOk: '密钥可用',
@@ -137,10 +137,10 @@ window.__ModuleLoader__.load({
         saved: '已保存',
         saveFailed: '保存失败',
         unsaved: '有未保存的修改',
+        blockedHint: '有必填项未填或校验未通过，请检查标红处后再保存',
         loading: '读取配置中…',
         readonly: '这个 profile 不允许改写配置，只能在 cordis.patch.yml 里改。',
         needToken: '填写这个账号的 CNB 访问令牌',
-        needRepo: '先验证令牌，再选组织与仓库',
         needProxyKey: '填写这个仓库的 PROXY_KEY',
         dupRepo: '同一个仓库只能有一个账号',
         intervalMin: '巡检间隔不能小于 30 秒',
@@ -152,6 +152,8 @@ window.__ModuleLoader__.load({
         checkSeconds: '巡检间隔（秒）',
         gatewayHost: '监听地址',
         gatewayHostHint: '0.0.0.0 局域网内其它设备也能用；127.0.0.1 只有本机能用',
+        hostLocal: '127.0.0.1 · 本机',
+        hostLan: '0.0.0.0 · 局域网',
         gatewayPort: '监听端口',
         gatewayPortHint: '被占用会自动顺延，实际端口看插件页',
         gatewayKey: '访问密钥',
@@ -195,17 +197,15 @@ window.__ModuleLoader__.load({
     const EN = {
       orb: {
         used: 'used',
-        hide: 'Hide',
         close: 'Collapse',
         openDetails: 'Open plugin page',
       },
       panel: {
         title: 'Workspace status',
-        empty: 'No account yet · add a CNB access token and an org/repo under Configure on this plugin row',
+        empty: 'No account yet · add a CNB access token and an org/repo on the CNB2API page (Settings → Plugins)',
         loading: 'Loading…',
         failed: 'Status unavailable',
         stale: 'last reading',
-        retry: 'Retry',
         refresh: 'Refresh',
         start: 'Start',
         starting: 'Starting…',
@@ -217,7 +217,6 @@ window.__ModuleLoader__.load({
         remaining: 'left',
         frozenHint: 'Pre-charged: already deducted, booked as used when the workspace stops — not refunded',
         coreHours: 'Core-hours',
-        checked: 'Last checked',
         activeAccount: 'Now',
         usable: 'Usable',
         unusable: 'Unusable',
@@ -226,6 +225,8 @@ window.__ModuleLoader__.load({
         lowCredit: 'Credit almost gone · top up',
         noneUsable: 'No account can serve requests · top up credit or fix the token',
         gateway: 'Gateway',
+        accountsUnit: 'accounts',
+        usableUnit: 'usable',
         gatewayBase: 'Base URL',
         gatewayLan: 'LAN',
         gatewayKey: 'Access key',
@@ -251,11 +252,12 @@ window.__ModuleLoader__.load({
         orb: 'Show floating ball',
         orbHint: 'A draggable ring in the corner showing total quota usage',
         intervalHint: 'Minimum 30s; shorter is fresher but costs more requests',
-        localeHint: 'Affects this plugin\u2019s own labels only',
+        localeHint: 'Affects this plugin\u2019s UI and the language of agent tool output',
         intro: 'Each account is one CNB user plus one org/repo. Verify the token first, then pick both from lists — a mistyped organisation or repository does not fail, it silently attaches to a different workspace.',
         empty: 'No account yet. Choose Add account, paste the token and press Verify, pick an organisation and repository from the lists, fill in the PROXY_KEY, then Save.',
         add: 'Add account',
         remove: 'Remove',
+        cancelAdd: 'Cancel',
         removeConfirm: 'Confirm',
         removeNote: 'removed on save',
         cancel: 'Cancel',
@@ -292,7 +294,6 @@ window.__ModuleLoader__.load({
         portHint: 'Empty uses the global port below',
         show: 'Show',
         hide: 'Hide',
-        openConfigure: 'Configure accounts',
         keyCheck: 'Test key',
         keyChecking: 'Testing…',
         keyOk: 'Key works',
@@ -303,10 +304,10 @@ window.__ModuleLoader__.load({
         saved: 'Saved',
         saveFailed: 'Save failed',
         unsaved: 'Unsaved changes',
+        blockedHint: 'Fill required fields or fix the highlighted errors before saving',
         loading: 'Loading configuration…',
         readonly: 'This profile does not allow configuration writes; edit cordis.patch.yml instead.',
         needToken: 'Fill in this account\u2019s CNB access token',
-        needRepo: 'Verify the token, then choose an organisation and repository',
         needProxyKey: 'Fill in this repository\u2019s PROXY_KEY',
         dupRepo: 'One account per repository',
         intervalMin: 'The check interval cannot be less than 30 seconds',
@@ -318,6 +319,8 @@ window.__ModuleLoader__.load({
         checkSeconds: 'Check interval (seconds)',
         gatewayHost: 'Listen address',
         gatewayHostHint: '0.0.0.0 also serves other devices on the LAN; 127.0.0.1 is this machine only',
+        hostLocal: '127.0.0.1 · local',
+        hostLan: '0.0.0.0 · LAN',
         gatewayPort: 'Listen port',
         gatewayPortHint: 'Falls forward when taken; the plugin page shows the actual one',
         gatewayKey: 'Access key',
@@ -359,7 +362,15 @@ window.__ModuleLoader__.load({
     };
 
     /** Pick the table for the page's language, read at render time. */
-    const table = () => (String(document.documentElement.lang || 'zh').toLowerCase().startsWith('en') ? EN : ZH);
+    // 语言：显式配置（zh/en）优先，auto/未知时跟随浏览器 lang。
+    // 这样「插件设置里选中文/英文」是真的生效，而不是死开关。
+    const table = (pref) => {
+      const wanted = String(pref || '').toLowerCase();
+      const lang = wanted === 'zh' || wanted === 'en'
+        ? wanted
+        : (String(document.documentElement.lang || 'zh').toLowerCase().startsWith('en') ? 'en' : 'zh');
+      return lang === 'en' ? EN : ZH;
+    };
 
     // ---------------------------------------------------------------- styles
 
@@ -369,19 +380,19 @@ window.__ModuleLoader__.load({
      * 32px inputs, 12/13px type.
      */
     const CSS = `
-.cnb2api { display: flex; flex-direction: column; gap: 12px; font-size: 13px; color: var(--dsw-alias-label-primary); }
+.cnb2api { display: flex; flex-direction: column; gap: 10px; font-size: 14px; color: var(--dsw-alias-label-primary); }
 .cnb2api * { box-sizing: border-box; }
 .cnb2api-sec {
-  display: flex; flex-direction: column; gap: 10px;
-  padding-top: 14px; margin-top: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+  padding-top: 10px; margin-top: 8px;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 .cnb2api-head { display: flex; align-items: center; gap: 8px; }
-.cnb2api-title { margin: 0; flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--dsw-alias-label-secondary); }
-.cnb2api-hint { font-size: 11px; line-height: 1.55; color: var(--dsw-alias-label-quaternary); }
+.cnb2api-title { margin: 0; flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: var(--dsw-alias-label-secondary); }
+.cnb2api-hint { font-size: 12px; line-height: 1.5; color: var(--dsw-alias-label-quaternary); }
 .cnb2api-hint[data-bad="true"] { color: var(--dsw-alias-label-error); }
 .cnb2api-hint[data-ok="true"] { color: var(--dsw-alias-state-success-primary); }
-.cnb2api-note { margin: 0; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-tertiary); }
+.cnb2api-note { margin: 0; font-size: 13px; line-height: 1.55; color: var(--dsw-alias-label-tertiary); }
 .cnb2api-note[data-tone="error"] { color: var(--dsw-alias-label-error); }
 .cnb2api-note[data-tone="ok"] { color: var(--dsw-alias-state-success-primary); }
 .cnb2api-note[data-tone="warn"] { color: var(--dsw-alias-state-warn-label); }
@@ -447,10 +458,12 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
 }
 .cnb2api-setting {
   display: flex; align-items: center; gap: 12px;
-  padding: 8px 0;
+  padding: 6px 0;
   border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
 .cnb2api-setting:last-child { border-bottom: none; }
+/* 模板类设置独占整行：标签在上，输入与变量在下，避免窄面板里左标签被挤到换行 */
+.cnb2api-setting-block { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
 .cnb2api-setting-main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .cnb2api-setting-label { font-size: 12px; color: var(--dsw-alias-label-primary); }
 .cnb2api-keyrow { display: flex; align-items: center; gap: 6px; flex: none; }
@@ -469,10 +482,13 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
   padding: 4px 8px;
 }
 .cnb2api-input-num { width: auto; min-width: 84px; max-width: 120px; flex: none; }
+.cnb2api-input-host { width: 172px; max-width: 62vw; flex: none; }
 .cnb2api-input-wide { width: 300px; max-width: 46vw; flex: none; text-align: left; }
+/* 纵向区块里的输入框铺满整行（低额度提示专用） */
+.cnb2api-input-block { width: 100%; max-width: none; flex: none; text-align: left; }
 /* 模板输入 + 变量图例 + 示例，纵向堆叠在控件一侧 */
-.cnb2api-stack { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; flex: none; max-width: 46vw; }
-.cnb2api-vars { display: flex; flex-wrap: wrap; gap: 4px 10px; justify-content: flex-end; }
+.cnb2api-stack { display: flex; flex-direction: column; gap: 8px; align-items: stretch; width: 100%; }
+.cnb2api-vars { display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: flex-start; }
 .cnb2api-var { display: inline-flex; align-items: baseline; gap: 4px; font-size: 11px; color: var(--dsw-alias-label-tertiary); }
 .cnb2api-var code {
   font-family: var(--dsw-alias-font-mono, ui-monospace, monospace); font-size: 11px;
@@ -481,8 +497,8 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
 }
 .cnb2api-var-desc { color: var(--dsw-alias-label-quaternary); }
 .cnb2api-example {
-  display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; justify-content: flex-end;
-  font-size: 11px; color: var(--dsw-alias-label-secondary); text-align: right;
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; justify-content: flex-start;
+  font-size: 11px; color: var(--dsw-alias-label-secondary); text-align: left;
 }
 .cnb2api-switch {
   flex: none; appearance: none; width: 34px; height: 20px; border-radius: 10px;
@@ -497,9 +513,9 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
 .cnb2api-switch:checked { background: var(--dsw-alias-state-business-primary); }
 .cnb2api-switch:checked::after { transform: translateX(14px); }
 .cnb2api-switch:disabled { opacity: .4; cursor: not-allowed; }
-.cnb2api-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.cnb2api-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
-.cnb2api-toggle input { accent-color: var(--dsw-alias-state-business-primary); }
+.cnb2api-foot {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  padding: 8px 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .cnb2api-orb-wrap { position: absolute; pointer-events: auto; z-index: 1; }
 .cnb2api-orb {
@@ -527,7 +543,11 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
   box-shadow: 0 0 0 1.5px var(--dsw-alias-bg-layer-1);
   background: var(--dsw-alias-label-quaternary);
 }
-.cnb2api-ring { position: absolute; inset: 0; }
+.cnb2api-ring {
+  position: absolute; inset: 0; width: 44px; height: 44px; pointer-events: none;
+  /* SVG 有自己的 viewBox 与物理尺寸，1:1 绘制不缩放，避免小尺寸下拉伸导致的锯齿/变形。
+     shape-rendering 留默认（auto）：浏览器对 stroke 做原生抗锯齿，最稳。 */
+}
 .cnb2api-ring-track { stroke: var(--dsw-alias-border-l2); }
 .cnb2api-ring-fill { stroke: var(--dsw-alias-state-business-primary); transition: stroke-dasharray .3s ease; }
 .cnb2api-ring[data-tone="ok"] .cnb2api-ring-fill { stroke: var(--dsw-alias-state-success-primary); }
@@ -555,8 +575,18 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
   background: var(--dsw-alias-bg-layer-1);
   box-shadow: var(--dsw-shadow-lv3);
   font-size: 12px; color: var(--dsw-alias-label-primary);
+  /* 亮色下浅色小字在子像素渲染会发虚：强制灰度抗锯齿，文字更利落 */
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
 }
 .cnb2api-orb-card > .cnb2api-head { flex: none; }
+/* 亮色下发虚的根源是最浅一档的 11px quaternary 小字：
+   在悬浮球卡片内统一提一档对比度与字号，暗色也仍然协调。 */
+.cnb2api-orb-card .cnb2api-meter-foot { font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.cnb2api-orb-card .cnb2api-detail { color: var(--dsw-alias-label-secondary); }
+.cnb2api-orb-card .cnb2api-row[data-usable="false"] .cnb2api-detail { color: var(--dsw-alias-label-secondary); }
+.cnb2api-orb-card .cnb2api-meter-label,
+.cnb2api-orb-card .cnb2api-meter-pct { color: var(--dsw-alias-label-secondary); }
 /* 底部按钮撑满宽度并与卡片内边距对齐，成为一条清楚的「出口」 */
 .cnb2api-orb-open {
   flex: none; width: 100%; height: 30px; margin-top: 2px;
@@ -568,8 +598,8 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
   margin: 0 -6px; padding: 0 6px;
 }
 .cnb2api-row {
-  display: flex; flex-direction: column; gap: 4px;
-  padding: 10px 0;
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 8px 0;
   border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
 .cnb2api-row:last-child { border-bottom: none; }
@@ -593,7 +623,6 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
 .cnb2api-meter-dead { color: var(--dsw-alias-label-tertiary); }
 .cnb2api-meter-none { flex: 1; color: var(--dsw-alias-label-quaternary); }
 .cnb2api-meter-foot { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--dsw-alias-label-quaternary); }
-.cnb2api-meter-bonus { color: var(--dsw-alias-label-tertiary); }
 .cnb2api-bar { height: 4px; border-radius: 2px; background: var(--dsw-alias-border-l2); overflow: hidden; }
 .cnb2api-bar-fill { display: block; height: 100%; border-radius: 2px; background: var(--dsw-alias-state-business-primary); }
 /* 剩余不足 10%：用警示色提醒，但仍然不是红色 —— 红留给真正的故障 */
@@ -667,7 +696,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
     // ---------------------------------------------------------------- panel
 
     /** Poll the Host snapshot while the panel is mounted. */
-    function useSnapshot() {
+    function useSnapshot(enabled = true) {
       const [view, setView] = useState({ phase: 'loading', data: null, error: null });
 
       const read = useCallback(async () => {
@@ -684,12 +713,13 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
       }, []);
 
       useEffect(() => {
+        if (!enabled) return undefined;
         let live = true;
         const tick = () => { if (live) read(); };
         tick();
         const timer = setInterval(tick, POLL_MS);
         return () => { live = false; clearInterval(timer); };
-      }, [read]);
+      }, [read, enabled]);
 
       return { ...view, reload: read };
     }
@@ -723,9 +753,14 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
      */
     function orgLabel(org, t) {
       const base = org.personal ? `${org.name} (${t.form.personal})` : org.name;
-      if (!org.credit) return `${base} · ${t.form.quotaUnknown}`;
+      const remain = Number(org.credit?.remain);
+      const total = Number(org.credit?.total);
+      // 额度字段缺失或是字符串垃圾时不要渲染出 NaN，退回「额度未知」
+      if (!org.credit || !Number.isFinite(remain) || !Number.isFinite(total)) {
+        return `${base} · ${t.form.quotaUnknown}`;
+      }
       const lead = org.credit.exhausted ? t.panel.exhausted : t.panel.remaining;
-      return `${base} · ${lead} ${formatNum(org.credit.remain)}/${formatNum(org.credit.total)} cr`;
+      return `${base} · ${lead} ${formatNum(remain)}/${formatNum(total)} cr`;
     }
 
     /** One account row inside the panel. */
@@ -896,11 +931,14 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
     }
 
     function StatusPanel() {
-      const t = table();
       const { phase, data, error, reload } = useSnapshot();
+      const t = table(data?.locale);
       const [busy, setBusy] = useState(null);
       const [note, setNote] = useState(null);
       const [showGatewayKey, setShowGatewayKey] = useState(false);
+      // 状态面板可折叠：默认展开，点箭头收成一行摘要（账号/可用/网关），
+      // 需要看细节时再展开。
+      const [open, setOpen] = useState(true);
 
       const start = async (label) => {
         setBusy(label);
@@ -923,11 +961,36 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
         }
       };
 
+      /** 收起时的一行摘要：几个账号、几个可用、网关在哪。 */
+      const brief = () => {
+        if (!data) return t.panel.loading;
+        const list = data.accounts || [];
+        const usable = list.filter((a) => a.usable !== false && !a.belowFloor).length;
+        const gw = data.gateway || {};
+        const where = gw.baseUrl || '';
+        return `${list.length} ${t.panel.accountsUnit} · ${usable} ${t.panel.usableUnit}`
+          + (where ? ` · ${where}` : '');
+      };
+      // 加载/错误/未配置/网关未监听都必须把话说完，不能被收起
+      const forcedOpen = phase !== 'ready' || !data?.configured || data?.gateway?.listening === false;
+      const expanded = open || forcedOpen;
       const chrome = (children) => h('section', { className: 'cnb2api cnb2api-sec' },
         h('div', { className: 'cnb2api-head' },
+          h('button', {
+            type: 'button',
+            className: 'cnb2api-btn cnb2api-btn-icon',
+            // 强制展开（加载/错误/未配置/网关未监听）时禁用按钮，glyph 与 aria 跟随实际展开态，
+            // 否则会出现「箭头显示已收起、内容却还展开」的矛盾
+            title: expanded ? t.form.collapse : t.form.expand,
+            'aria-expanded': expanded ? 'true' : 'false',
+            disabled: forcedOpen,
+            onClick: () => setOpen((prev) => !prev),
+          }, expanded ? '▾' : '▸'),
           h('h3', { className: 'cnb2api-title' }, t.panel.title),
           h('button', { className: 'cnb2api-btn', onClick: reload }, t.panel.refresh)),
-        children);
+        expanded
+          ? children
+          : h('p', { className: 'cnb2api-note' }, brief()));
 
       if (phase === 'loading') return chrome(h('p', { className: 'cnb2api-note' }, t.panel.loading));
       if (phase === 'error') {
@@ -955,7 +1018,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
           key: account.label,
           account,
           t,
-          busy: busy === account.label,
+          busy,
           onStart: start,
         })),
         data.gateway
@@ -969,12 +1032,16 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
                   h('span', { className: 'cnb2api-gwlabel' }, t.panel.gatewayBase),
                   h('code', { className: 'cnb2api-code' }, data.gateway.baseUrl || ''),
                   h(CopyButton, { text: data.gateway.baseUrl || '', t })),
-                (data.gateway.lan || []).length > 0
-                  ? h('div', { className: 'cnb2api-gwrow' },
+                // 局域网地址由宿主 gateway.lan 给出；监听 127.0.0.1 时列表为空不显示
+                // gateway.lan 已经是拼好的完整基址（http://<ip>:<port>/v1），直接显示
+                ...(data.gateway.lanOnly && (data.gateway.lan || []).length > 0
+                  ? data.gateway.lan.map((url, at) => h('div', {
+                    className: 'cnb2api-gwrow', key: `lan-${at}`,
+                  },
                     h('span', { className: 'cnb2api-gwlabel' }, t.panel.gatewayLan),
-                    h('code', { className: 'cnb2api-code' }, data.gateway.lan.join('  ')),
-                    h(CopyButton, { text: data.gateway.lan[0], t }))
-                  : null,
+                    h('code', { className: 'cnb2api-code' }, url),
+                    h(CopyButton, { text: url, t })))
+                  : []),
                 h('div', { className: 'cnb2api-gwrow' },
                   h('span', { className: 'cnb2api-gwlabel' }, t.panel.gatewayKey),
                   h('code', { className: 'cnb2api-code' },
@@ -1039,7 +1106,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
     // 复用它的组件实例，把上一个账号的用户名/组织/密钥校验结果显示到新行上。
     let draftSeq = 0;
     const nextDraftId = () => `d${(draftSeq += 1)}`;
-    const blank = () => ({ _id: nextDraftId(), token: '', repo: '', proxyKey: '', branch: '', port: '' });
+    const blank = () => ({ _id: nextDraftId(), _isNew: true, token: '', repo: '', proxyKey: '', branch: '', port: '' });
 
     /** Normalize one stored account into a draft. */
     const toDraft = (raw) => ({
@@ -1087,6 +1154,41 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
       });
     }
 
+    /** 由配置值构造表单里的 general 状态（字符串化，便于输入框绑定）。 */
+    function generalFromValue(value = {}) {
+      return {
+        checkSeconds: String(Number(value.checkSeconds) || 120),
+        autoStart: value.autoStart !== false,
+        locale: String(value.locale || 'auto'),
+        gatewayHost: String(value.gatewayHost || '0.0.0.0'),
+        gatewayPort: String(Number(value.gatewayPort) || 41729),
+        gatewayKey: String(value.gatewayKey || ''),
+        autoPublish: value.autoPublish !== false,
+        lowCreditPercent: String(Number(value.lowCreditPercent) || 5),
+        lowCreditMessage: String(value.lowCreditMessage || ''),
+        models: String(value.models || 'deepseek-v4.1-flash'),
+        creditFloorPercent: String(value.creditFloorPercent == null ? 1 : Number(value.creditFloorPercent)),
+      };
+    }
+
+    /** general 状态的持久化投影，与 save() 写入的字段一致：用来判断「有没有真的改动」。 */
+    function projectGeneral(g) {
+      if (!g) return null;
+      return {
+        checkSeconds: Number(g.checkSeconds) || 120,
+        autoStart: g.autoStart !== false,
+        locale: g.locale || 'auto',
+        gatewayHost: g.gatewayHost || '0.0.0.0',
+        gatewayPort: Number(g.gatewayPort) || 41729,
+        gatewayKey: String(g.gatewayKey || ''),
+        autoPublish: g.autoPublish !== false,
+        lowCreditPercent: Number(g.lowCreditPercent) || 5,
+        lowCreditMessage: String(g.lowCreditMessage || ''),
+        models: String(g.models || '').trim(),
+        creditFloorPercent: Number(g.creditFloorPercent) || 0,
+      };
+    }
+
     /** POST JSON to a Host route and return the parsed body (never throws on HTTP status). */
     async function postJson(path, payload) {
       const response = await fetch(path, {
@@ -1126,7 +1228,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
      * does not fail loudly — it silently attaches to whatever matches — so both
      * are chosen from live lists instead of typed.
      */
-    function AccountCard({ index, row, problem, t, disabled, onChange, onRemove, collapsed, onToggleCollapse }) {
+    function AccountCard({ index, row, problem, t, disabled, onChange, onRemove, onCancel, collapsed, onToggleCollapse }) {
       const id = (suffix) => `cnb2api-${index}-${suffix}`;
       const [more, setMore] = useState(false);
       const [confirming, setConfirming] = useState(false);
@@ -1210,13 +1312,26 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
             ? h('span', { className: 'cnb2api-hint' }, auth.username)
             : null,
           confirming ? h('span', { className: 'cnb2api-hint' }, t.form.removeNote) : null,
-          h('button', {
-            type: 'button',
-            className: 'cnb2api-btn',
-            'data-v': confirming ? 'danger' : undefined,
-            disabled,
-            onClick: () => (confirming ? onRemove() : setConfirming(true)),
-          }, confirming ? t.form.removeConfirm : t.form.remove),
+          // 新加的行还没保存：给一个「取消」，点了直接丢掉，不用走两步移除确认
+          row._isNew && typeof onCancel === 'function'
+            ? h('button', {
+              type: 'button',
+              className: 'cnb2api-btn',
+              'data-v': 'outline',
+              disabled,
+              onClick: onCancel,
+            }, t.form.cancelAdd)
+            : null,
+          // 已保存的行才需要「移除」（两步确认，避免误删）
+          row._isNew && typeof onCancel === 'function'
+            ? null
+            : h('button', {
+              type: 'button',
+              className: 'cnb2api-btn',
+              'data-v': confirming ? 'danger' : undefined,
+              disabled,
+              onClick: () => (confirming ? onRemove() : setConfirming(true)),
+            }, confirming ? t.form.removeConfirm : t.form.remove),
           confirming
             ? h('button', {
               type: 'button',
@@ -1277,8 +1392,9 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
             value: org,
             empty: t.form.noOrgs,
             placeholder: t.form.pickOrg,
-            // 只有 1 个组织时选它也等于没得选，但仍要显示出来（用户能看懂自己接在哪）
-            disabled: disabled || orgOptions.length === 1,
+            // 只有「唯一候选且当前已选中」时才禁用；新账号 org 为空时仍要能选，
+            // 否则单组织账号永远填不出仓库
+            disabled: disabled || (orgOptions.length === 1 && org === orgOptions[0].name),
             options: orgOptions.map((item) => ({ value: item.name, label: orgLabel(item, t) })),
             onChange: (value) => {
               // 换组织就清掉仓库：旧仓库不属于新组织
@@ -1405,20 +1521,24 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
 
     /** The configuration form for this plugin row. */
     function ConfigForm({ form }) {
-      const t = table();
       const orb = useOrbVisibility();
       const [snapshot, setSnapshot] = useState(() => form.getSnapshot());
       const [rows, setRows] = useState(null);
       const [general, setGeneral] = useState(null);
+      const t = table(general?.locale);
       // 折叠的账号卡（下标集合）。账号多时用「收起全部」把页面压短。
       const [folded, setFolded] = useState(() => new Set());
       const [dirty, setDirty] = useState(false);
       const [saving, setSaving] = useState(false);
       const [note, setNote] = useState(null);
+      // 提示只显示在「用户刚点的那条保存栏」上，避免上下两条各显示一遍「已保存」
+      const [noteBar, setNoteBar] = useState('top');
       // 密钥默认遮住：配置页可能被投屏或截图
       const [showGatewayKey, setShowGatewayKey] = useState(false);
       const seededAt = useRef(undefined);
       const dirtyRef = useRef(false);
+      // 已保存配置的基线：取消新增行等操作后据此重算 dirty，避免假的「未保存」
+      const baselineRef = useRef(null);
       dirtyRef.current = dirty;
 
       useEffect(() => {
@@ -1440,21 +1560,12 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
         const value = snapshot.value || {};
         const seeded = (Array.isArray(value.accounts) ? value.accounts : []).map(toDraft);
         setRows(seeded);
-        // 账号默认收起：账号多时一进来就是一行一个，不把页面撑长
+        // 已保存的账号默认收起；新添加的账号由「添加账号」按钮展开
         setFolded(new Set(seeded.map((item) => item._id)));
-        setGeneral({
-          checkSeconds: String(Number(value.checkSeconds) || 120),
-          autoStart: value.autoStart !== false,
-          locale: String(value.locale || 'auto'),
-          gatewayHost: String(value.gatewayHost || '0.0.0.0'),
-          gatewayPort: String(Number(value.gatewayPort) || 41729),
-          gatewayKey: String(value.gatewayKey || ''),
-          autoPublish: value.autoPublish !== false,
-          lowCreditPercent: String(Number(value.lowCreditPercent) || 5),
-          lowCreditMessage: String(value.lowCreditMessage || ''),
-          models: String(value.models || 'deepseek-v4.1-flash'),
-          creditFloorPercent: String(value.creditFloorPercent == null ? 1 : Number(value.creditFloorPercent)),
-        });
+        const nextGeneral = generalFromValue(value);
+        setGeneral(nextGeneral);
+        // 记下已保存基线：取消新增行后可据此把 dirty 正确回落
+        baselineRef.current = { accounts: toAccounts(seeded), general: projectGeneral(nextGeneral) };
         setDirty(false);
       }, [snapshot]);
 
@@ -1464,25 +1575,25 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
         setNote(null);
       };
 
+      /** 取消新增行后，按「剩余草稿 vs 已保存基线」重算 dirty，避免假的「未保存」。 */
+      const recomputeDirty = (nextRows) => {
+        const base = baselineRef.current;
+        if (!base || !general) return;
+        const sameAccounts = JSON.stringify(toAccounts(nextRows)) === JSON.stringify(base.accounts);
+        const sameGeneral = JSON.stringify(projectGeneral(general)) === JSON.stringify(base.general);
+        setDirty(!(sameAccounts && sameGeneral));
+      };
+
       const discard = () => {
         const value = form.getSnapshot().value || {};
         const seeded = (Array.isArray(value.accounts) ? value.accounts : []).map(toDraft);
         setRows(seeded);
-        // 账号默认收起：账号多时一进来就是一行一个，不把页面撑长
+        // 已保存的账号默认收起；新添加的账号由「添加账号」按钮展开
         setFolded(new Set(seeded.map((item) => item._id)));
-        setGeneral({
-          checkSeconds: String(Number(value.checkSeconds) || 120),
-          autoStart: value.autoStart !== false,
-          locale: String(value.locale || 'auto'),
-          gatewayHost: String(value.gatewayHost || '0.0.0.0'),
-          gatewayPort: String(Number(value.gatewayPort) || 41729),
-          gatewayKey: String(value.gatewayKey || ''),
-          autoPublish: value.autoPublish !== false,
-          lowCreditPercent: String(Number(value.lowCreditPercent) || 5),
-          lowCreditMessage: String(value.lowCreditMessage || ''),
-          models: String(value.models || 'deepseek-v4.1-flash'),
-          creditFloorPercent: String(value.creditFloorPercent == null ? 1 : Number(value.creditFloorPercent)),
-        });
+        const nextGeneral = generalFromValue(value);
+        setGeneral(nextGeneral);
+        // 记下已保存基线：取消新增行后可据此把 dirty 正确回落
+        baselineRef.current = { accounts: toAccounts(seeded), general: projectGeneral(nextGeneral) };
         setDirty(false);
         setNote(null);
       };
@@ -1526,6 +1637,12 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
             { op: 'set', path: ['creditFloorPercent'], value: Number(general.creditFloorPercent) || 0 },
           ]);
           if (accepted) {
+            // 保存成功后把草稿按已保存重建：否则新增行仍带 _isNew，
+            // 界面上会显示「取消」（无两步确认）而不是「移除」。
+            setRows((prev) => prev.map((row) => ({ ...row, _isNew: false })));
+            // 同步把基线推到刚保存的状态：否则 seed effect 若因 dirty 时序被跳过，
+            // 基线会停留在保存前，「保存后再加行又取消」会误报「未保存」。
+            baselineRef.current = { accounts: toAccounts(rows), general: projectGeneral(general) };
             setDirty(false);
             setNote({ tone: 'ok', text: t.form.saved });
           } else {
@@ -1537,6 +1654,31 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
           setSaving(false);
         }
       };
+
+      // 「保存 / 撤销」和「添加账号」同一行：加完账号手就在这儿，不用再去页面底部找。
+      // 底部（全局设置之后）还会再渲染一条相同的保存栏，方便改完下面的设置就近保存。
+      // bar: 'top'（账号区）或 'bottom'（全局设置之后）。两条栏各渲染一次，
+      // 但「已保存/失败」这类瞬时提示只出现在用户刚点的那一条上。
+      const saveButtons = (bar) => [
+        h('button', {
+          type: 'button',
+          className: 'cnb2api-btn',
+          'data-v': 'primary',
+          disabled: !writable || blocked || !dirty,
+          onClick: () => { setNoteBar(bar); save(); },
+        }, saving ? t.form.saving : t.form.save),
+        h('button', {
+          type: 'button',
+          className: 'cnb2api-btn',
+          'data-v': 'outline',
+          disabled: !writable || !dirty,
+          onClick: () => { setNoteBar(bar); discard(); },
+        }, t.form.discard),
+        // 被禁用时说明原因：否则用户只看到一个灰按钮，以为什么都没有（持续状态，两条都显示）
+        blocked && writable ? h('span', { className: 'cnb2api-note' }, t.form.blockedHint) : null,
+        note && noteBar === bar ? h('span', { className: 'cnb2api-note', 'data-tone': note.tone }, note.text) : null,
+        !snapshot.writable ? h('span', { className: 'cnb2api-note' }, t.form.readonly) : null,
+      ];
 
       return h('div', { className: 'cnb2api' },
         h('p', { className: 'cnb2api-note' }, t.form.intro),
@@ -1570,8 +1712,18 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
             return next;
           }),
           onChange: (patch) => edit(index, patch),
+          onCancel: () => {
+            // 取消新增行：移除草稿后按基线重算 dirty（输入过内容也不该留下假的「未保存」）
+            const nextRows = rows.filter((_, at) => at !== index);
+            setRows(nextRows);
+            setFolded((prev) => { const next = new Set(prev); next.delete(row._id); return next; });
+            recomputeDirty(nextRows);
+            setNote(null);
+          },
           onRemove: () => {
             setRows((prev) => prev.filter((_, at) => at !== index));
+            // 顺手把这一行从折叠集合里删掉，免得「展开全部/收起全部」的判断被幽灵 id 影响
+            setFolded((prev) => { const next = new Set(prev); next.delete(row._id); return next; });
             setDirty(true);
             setNote(null);
           },
@@ -1587,10 +1739,11 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
               setRows((prev) => [...prev, row]);
               // 新加的行一定展开，否则用户点「添加」看不到输入框
               setFolded((prev) => { const next = new Set(prev); next.delete(row._id); return next; });
-              setDirty(true);
+              // 空行还没改任何配置，不点亮保存；填了内容由 edit() 置脏
               setNote(null);
             },
-          }, t.form.add)),
+          }, t.form.add),
+          ...saveButtons('top')),
 
         // 全局设置：行式布局（左标签、右控件），比纵向堆叠紧凑，也更容易扫读
         h('div', { className: 'cnb2api-sec' },
@@ -1617,6 +1770,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
               onChange: (event) => {
                 setGeneral((prev) => ({ ...prev, checkSeconds: event.target.value }));
                 setDirty(true);
+                setNote(null);
               },
             })),
 
@@ -1628,14 +1782,17 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
             ),
             h('select', {
               id: 'cnb2api-host',
-              className: 'cnb2api-input cnb2api-input-num',
+              className: 'cnb2api-input cnb2api-input-host',
               value: general.gatewayHost,
               disabled: !writable,
               onChange: (event) => {
                 setGeneral((prev) => ({ ...prev, gatewayHost: event.target.value }));
                 setDirty(true);
+                setNote(null);
               },
-            }, h('option', { value: '0.0.0.0' }, '0.0.0.0'), h('option', { value: '127.0.0.1' }, '127.0.0.1'))),
+            },
+            h('option', { value: '127.0.0.1' }, t.form.hostLocal),
+            h('option', { value: '0.0.0.0' }, t.form.hostLan))),
 
           h('div', { className: 'cnb2api-setting' },
             h('div', { className: 'cnb2api-setting-main' },
@@ -1658,6 +1815,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
               onChange: (event) => {
                 setGeneral((prev) => ({ ...prev, gatewayPort: event.target.value }));
                 setDirty(true);
+                setNote(null);
               },
             })),
 
@@ -1679,6 +1837,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
                 onChange: (event) => {
                   setGeneral((prev) => ({ ...prev, gatewayKey: event.target.value }));
                   setDirty(true);
+                  setNote(null);
                 },
               }),
               h('button', {
@@ -1702,6 +1861,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
                     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
                   setGeneral((prev) => ({ ...prev, gatewayKey: `sk-cnb-${text}` }));
                   setDirty(true);
+                  setNote(null);
                 },
               }, t.form.gatewayRegenerate))),
 
@@ -1727,6 +1887,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
               onChange: (event) => {
                 setGeneral((prev) => ({ ...prev, creditFloorPercent: event.target.value }));
                 setDirty(true);
+                setNote(null);
               },
             })),
 
@@ -1751,10 +1912,11 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
               onChange: (event) => {
                 setGeneral((prev) => ({ ...prev, lowCreditPercent: event.target.value }));
                 setDirty(true);
+                setNote(null);
               },
             })),
 
-          h('div', { className: 'cnb2api-setting' },
+          h('div', { className: 'cnb2api-setting cnb2api-setting-block' },
             h('div', { className: 'cnb2api-setting-main' },
               h('label', { className: 'cnb2api-setting-label', htmlFor: 'cnb2api-lowmsg' }, t.form.lowCreditMessage),
               h('span', { className: 'cnb2api-hint' }, t.form.lowCreditMessageHint),
@@ -1762,7 +1924,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
             h('div', { className: 'cnb2api-stack' },
               h('input', {
                 id: 'cnb2api-lowmsg',
-                className: 'cnb2api-input cnb2api-input-wide',
+                className: 'cnb2api-input cnb2api-input-block',
                 type: 'text',
                 value: general.lowCreditMessage,
                 placeholder: t.panel.lowCredit,
@@ -1771,6 +1933,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
                 onChange: (event) => {
                   setGeneral((prev) => ({ ...prev, lowCreditMessage: event.target.value }));
                   setDirty(true);
+                  setNote(null);
                 },
               }),
               // 变量逐个说明：只列名字用户不知道怎么用
@@ -1819,6 +1982,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
               onChange: (event) => {
                 setGeneral((prev) => ({ ...prev, models: event.target.value }));
                 setDirty(true);
+                setNote(null);
               },
             })),
 
@@ -1837,6 +2001,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
               onChange: (event) => {
                 setGeneral((prev) => ({ ...prev, autoPublish: event.target.checked }));
                 setDirty(true);
+                setNote(null);
               },
             })),
 
@@ -1855,6 +2020,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
               onChange: (event) => {
                 setGeneral((prev) => ({ ...prev, autoStart: event.target.checked }));
                 setDirty(true);
+                setNote(null);
               },
             })),
 
@@ -1886,29 +2052,15 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
               onChange: (event) => {
                 setGeneral((prev) => ({ ...prev, locale: event.target.value }));
                 setDirty(true);
+                setNote(null);
               },
             },
             h('option', { value: 'auto' }, t.form.localeAuto),
             h('option', { value: 'zh' }, '中文'),
             h('option', { value: 'en' }, 'English')))),
 
-        h('div', { className: 'cnb2api-foot' },
-          h('button', {
-            type: 'button',
-            className: 'cnb2api-btn',
-            'data-v': 'primary',
-            disabled: !writable || blocked || !dirty,
-            onClick: save,
-          }, saving ? t.form.saving : t.form.save),
-          h('button', {
-            type: 'button',
-            className: 'cnb2api-btn',
-            'data-v': 'outline',
-            disabled: !writable || !dirty,
-            onClick: discard,
-          }, t.form.discard),
-          note ? h('span', { className: 'cnb2api-note', 'data-tone': note.tone }, note.text) : null,
-          !snapshot.writable ? h('span', { className: 'cnb2api-note' }, t.form.readonly) : null),
+        // 全局设置底部也放一条保存栏：改完下面的设置就近保存，不用滚回顶部
+        h('div', { className: 'cnb2api-foot' }, ...saveButtons('bottom')),
 
         h('p', { className: 'cnb2api-hint' }, t.form.secrets));
     }
@@ -1957,7 +2109,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
     }
 
     /** Where the orb sits when the user has not dragged it. */
-    const ORB_POSITION_KEY = 'cnb2api:orb';
+    const ORB_POSITION_KEY = 'cnb2api:orb-v2';
     const ORB_SIZE = 44;
     const ORB_MARGIN = 16;
 
@@ -1969,10 +2121,19 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
     function clampOrb(point) {
       const width = window.innerWidth || 0;
       const height = window.innerHeight || 0;
-      return {
-        x: Math.min(Math.max(ORB_MARGIN, point.x), Math.max(ORB_MARGIN, width - ORB_SIZE - ORB_MARGIN)),
-        y: Math.min(Math.max(ORB_MARGIN, point.y), Math.max(ORB_MARGIN, height - ORB_SIZE - ORB_MARGIN)),
-      };
+      let x = Math.min(Math.max(ORB_MARGIN, point.x), Math.max(ORB_MARGIN, width - ORB_SIZE - ORB_MARGIN));
+      let y = Math.min(Math.max(ORB_MARGIN, point.y), Math.max(ORB_MARGIN, height - ORB_SIZE - ORB_MARGIN));
+      // 整条顶部都是标题栏/系统控制区（macOS 红黄绿、Windows 最小化/最大化/关闭）。
+      // 球一旦进入，原生窗口会吞掉 pointer 事件 —— 表现为「球拖不动」，
+      // 同时按钮也被挡住。所以不论横向在哪，只要落在顶部带就推到它下方。
+      // 不依赖 UA 探测，跨平台一致。
+      const TITLEBAR_H = 80;
+      // 矮窗口时上界比标题栏还低，禁区不能把球推到窗口外
+      const upper = Math.max(ORB_MARGIN, height - ORB_SIZE - ORB_MARGIN);
+      const keepOut = Math.min(TITLEBAR_H + ORB_MARGIN, upper);
+      if (y < keepOut) y = keepOut;
+      // 落到整像素：半像素定位会让卡片的浅色小字在亮色下发虚
+      return { x: Math.round(x), y: Math.round(y) };
     }
 
     /** Read the saved orb position, or the default (bottom-right). */
@@ -2002,7 +2163,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
      */
     function Ring({ percent, tone, size = 44 }) {
       const stroke = 4;
-      // 再留 1px：外圈描边落在 viewBox 边缘上会被裁掉半条
+      // 半径留 1px：描边落在 viewBox 内不被裁掉半条
       const radius = (size - stroke) / 2 - 1;
       const circumference = 2 * Math.PI * radius;
       const clamped = Math.min(100, Math.max(0, Number(percent) || 0));
@@ -2012,15 +2173,13 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
         className: 'cnb2api-ring', 'data-tone': tone, 'aria-hidden': 'true',
       },
         h('circle', {
-          className: 'cnb2api-ring-track',
-          cx: size / 2, cy: size / 2, r: radius,
+          className: 'cnb2api-ring-track', cx: size / 2, cy: size / 2, r: radius,
           fill: 'none', strokeWidth: stroke,
         }),
         h('circle', {
-          className: 'cnb2api-ring-fill',
-          cx: size / 2, cy: size / 2, r: radius,
+          className: 'cnb2api-ring-fill', cx: size / 2, cy: size / 2, r: radius,
           fill: 'none', strokeWidth: stroke,
-          // 端帽用 butt：round 会在 85% 处甩出一个圆头，看起来像画错了一截
+          // butt 端帽：避免 round 在小尺寸甩出圆头看着像画错一截
           strokeLinecap: 'butt',
           strokeDasharray: `${dash} ${circumference}`,
           transform: `rotate(-90 ${size / 2} ${size / 2})`,
@@ -2040,15 +2199,27 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
      * threshold exists because a plain click also fires after a tiny drag.
      */
     function Orb({ onOpen }) {
-      const t = table();
       const visibility = useOrbVisibility();
       const visible = visibility.value;
-      const { phase, data, reload } = useSnapshot();
+      // 悬浮球收起时不再每 12 秒查一次状态：省请求，也让后台安静
+      const { phase, data, reload } = useSnapshot(visible);
+      const t = table(data?.locale);
       const [point, setPoint] = useState(initialOrbPoint);
+      const pointRef = useRef(point);
+      pointRef.current = point;
+      // 拖动会话：防重入、记最后一帧位置、供卸载时清理监听
+      const dragSession = useRef(null);
       const [open, setOpen] = useState(false);
       const [busy, setBusy] = useState(null);
       const [note, setNote] = useState(null);
-      const drag = useRef(null);
+
+      // 用户调整 DSH 窗口大小后，把球重新夹回可视区：否则停在旧坐标上，
+      // 窗口缩小后球就跑到窗口外/被挡住，看不见也点不到。
+      useEffect(() => {
+        const onResize = () => setPoint((prev) => clampOrb(prev));
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+      }, []);
 
       if (!visible) return null;
 
@@ -2095,38 +2266,80 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
         }
       };
 
+      // 拖动：在 document 上监听 move/up，而不是靠 setPointerCapture。
+      // Electron 的自定义标题栏会吞掉 pointer capture，球一旦靠近顶部就再也收不到
+      // move 事件 —— 表现为「拖不动、点不动」。全局监听不受此影响。
+      // 把当前会话的全局监听一次性摘掉（重入/抬起/卸载共用）
+      const detachDrag = () => {
+        const session = dragSession.current;
+        if (!session) return;
+        document.removeEventListener('pointermove', session.onMove);
+        document.removeEventListener('pointerup', session.onUp);
+        document.removeEventListener('pointercancel', session.onUp);
+        dragSession.current = null;
+      };
+
       const onPointerDown = (event) => {
         if (event.button !== undefined && event.button !== 0) return;
-        drag.current = {
-          startX: event.clientX, startY: event.clientY,
-          origin: point, moved: false,
+        // 已有会话（双指/触摸+鼠标）先清掉旧的，避免两套监听互相 toggle 打开状态
+        detachDrag();
+        const origin = { ...pointRef.current };
+        let last = origin;
+        let moved = false;
+        const onMove = (move) => {
+          if (move.pointerId !== undefined && move.pointerId !== event.pointerId) return;
+          const dx = move.clientX - event.clientX;
+          const dy = move.clientY - event.clientY;
+          if (!moved && Math.hypot(dx, dy) < 4) return;
+          moved = true;
+          last = clampOrb({ x: origin.x + dx, y: origin.y + dy });
+          setPoint(last);
         };
-        event.currentTarget.setPointerCapture?.(event.pointerId);
+        const onUp = (up) => {
+          if (up && up.pointerId !== undefined && up.pointerId !== event.pointerId) return;
+          detachDrag();
+          if (moved) {
+            // 落最后一帧，不依赖可能落后一帧的 pointRef
+            try { localStorage.setItem(ORB_POSITION_KEY, JSON.stringify(last)); } catch { /* 忽略 */ }
+          } else {
+            setOpen((prev) => !prev);
+          }
+        };
+        dragSession.current = { onMove, onUp };
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+        document.addEventListener('pointercancel', onUp);
       };
 
-      const onPointerMove = (event) => {
-        const state = drag.current;
-        if (!state) return;
-        const dx = event.clientX - state.startX;
-        const dy = event.clientY - state.startY;
-        if (!state.moved && Math.hypot(dx, dy) < 4) return;
-        state.moved = true;
-        setPoint(clampOrb({ x: state.origin.x + dx, y: state.origin.y + dy }));
-      };
-
-      const onPointerUp = () => {
-        const state = drag.current;
-        drag.current = null;
-        if (!state) return;
-        if (state.moved) {
-          // 拖动结束才落盘：拖的过程中每帧写 localStorage 没有意义
-          try { localStorage.setItem(ORB_POSITION_KEY, JSON.stringify(point)); } catch { /* 忽略 */ }
-          return;
-        }
-        setOpen((prev) => !prev);
-      };
+      // 组件在拖动中被卸载（插件重载/profile 切换）时兜底摘监听
+      useEffect(() => () => detachDrag(), []);
 
       const style = { left: `${point.x}px`, top: `${point.y}px` };
+
+      // 卡片弹出方向：按球在窗口里的位置选空间更大的一侧，避免贴边时弹到窗口外被遮挡。
+      const CARD_GAP = 8;
+      const CARD_W = 320;
+      const viewportW = window.innerWidth || 1200;
+      const viewportH = window.innerHeight || 800;
+      const spaceRight = viewportW - (point.x + ORB_SIZE) - ORB_MARGIN;
+      const spaceLeft = point.x - ORB_MARGIN;
+      const spaceBelow = viewportH - (point.y + ORB_SIZE) - ORB_MARGIN;
+      const spaceAbove = point.y - ORB_MARGIN;
+      // 够宽就放右边；不够则在左右中选空间大的一边
+      const cardRight = spaceRight >= CARD_W + CARD_GAP || spaceRight >= spaceLeft;
+      // 够高就放下面；不够则在上下中选空间大的一边（向下优先，符合直觉）
+      const cardBelow = spaceBelow >= viewportH * 0.6 || spaceBelow >= spaceAbove;
+      const cardWidth = Math.max(240, Math.min(CARD_W, (cardRight ? spaceRight : spaceLeft) - CARD_GAP));
+      const cardHeight = Math.max(180, Math.min(viewportH * 0.6,
+        (cardBelow ? spaceBelow : spaceAbove) - CARD_GAP));
+      const cardStyle = {
+        left: cardRight ? `${ORB_SIZE + CARD_GAP}px` : 'auto',
+        right: cardRight ? 'auto' : `${ORB_SIZE + CARD_GAP}px`,
+        top: cardBelow ? `${ORB_SIZE + CARD_GAP}px` : 'auto',
+        bottom: cardBelow ? 'auto' : `${ORB_SIZE + CARD_GAP}px`,
+        width: `${cardWidth}px`,
+        maxHeight: `${cardHeight}px`,
+      };
 
       return h('div', { className: 'cnb2api-orb-wrap', style },
         h('button', {
@@ -2137,9 +2350,6 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
           'aria-expanded': open ? 'true' : 'false',
           title: tooltip,
           onPointerDown,
-          onPointerMove,
-          onPointerUp,
-          onPointerCancel: () => { drag.current = null; },
         },
           h(Ring, { percent: percent === null ? 0 : percent, tone, size: ORB_SIZE }),
           h('span', { className: 'cnb2api-orb-text' },
@@ -2149,7 +2359,10 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
           h('span', { className: 'cnb2api-orb-dot', 'data-tone': tone })),
 
         open
-          ? h('div', { className: 'cnb2api-orb-card', role: 'dialog', 'aria-label': t.panel.title },
+          ? h('div', {
+            className: 'cnb2api-orb-card', role: 'dialog', 'aria-label': t.panel.title,
+            style: cardStyle,
+          },
             h('div', { className: 'cnb2api-head' },
               h('h3', { className: 'cnb2api-title' }, t.panel.title),
               h('button', {
@@ -2159,11 +2372,11 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
                 onClick: reload,
               }, h('span', { className: 'cnb2api-icon', 'aria-hidden': 'true' }, '↻')),
               h('button', {
-                className: 'cnb2api-btn',
+                className: 'cnb2api-btn cnb2api-btn-icon',
                 title: t.orb.close,
                 'aria-label': t.orb.close,
                 onClick: () => setOpen(false),
-              }, '×')),
+              }, h('span', { className: 'cnb2api-icon', 'aria-hidden': 'true' }, '×'))),
 
             // 只有这一块滚动：标题栏和底部按钮都留在原地，
             // 否则滚到底就找不到关闭按钮了。
@@ -2180,7 +2393,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
                     account,
                     t,
                     compact: true,
-                    busy: busy === account.label,
+                    busy,
                     onStart: start,
                   })),
               note ? h('p', { className: 'cnb2api-note', 'data-tone': note.tone }, note.text) : null),
@@ -2264,7 +2477,9 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
         ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
           name: 'plugins.bundle.config',
           key: PACKAGE,
-        }, ({ view }) => (view === 'summary' ? table().form.title : h(ConfigForm, { form }))));
+        }, ({ view }) => (view === 'summary'
+          ? table((form.getSnapshot?.()?.value || {}).locale).form.title
+          : h(ConfigForm, { form }))));
 
       },
     };

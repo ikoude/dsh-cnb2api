@@ -141,7 +141,6 @@ test('可再用额度 = 总额 − 已用 − 冻结', () => {
   const view = consumption(ledger);
   assert.equal(Math.round(view.consumed * 100) / 100, 1120.65);
   assert.equal(Math.round(view.remain * 100) / 100, 45.35);
-  console.log(`used ${view.used} + frozen ${view.frozen} = ${view.consumed}`);
 });
 
 test('没有冻结时消耗就是已用', () => {

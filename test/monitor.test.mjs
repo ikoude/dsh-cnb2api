@@ -317,3 +317,57 @@ test('换凭据把旧账号的结论全部清掉', async () => {
   assert.equal(monitor.creditExhausted, false);
   assert.equal(monitor.lastCheckedAt, 0);
 });
+
+test('换凭据时在途额度查询作废：旧账号的额度不会写进新账号', async () => {
+  // 旧账号的 quota 请求故意卡住，期间 replaceCredentials 换成另一个账号，
+  // 旧请求回来不能污染新账号的 quotaCache / creditExhausted。
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const cnb = fakeCnb({ record: { sn: 'sn-1', status: 'running', branch: 'main', create_time: '2026-01-01T00:00:00Z' } });
+  let first = true;
+  cnb.readQuota = async () => {
+    if (first) { first = false; await gate; return { quota: { credit_in_milli: { total: 1_000_000 } }, volume: { credit_in_milli: 1_000_000, freeze_credit_in_milli: 0 }, special: null, failures: [] }; }
+    return { quota: { credit_in_milli: { total: 1_000_000 } }, volume: { credit_in_milli: 200_000, freeze_credit_in_milli: 0 }, special: null, failures: [] };
+  };
+
+  const monitor = makeMonitor(cnb);
+  const pending = monitor.quota(true);          // 旧账号：卡在 gate 上
+  monitor.replaceCredentials({ token: 'nk-other', repo: 'acme/gateway', proxyKey: 'sk-2' });
+  release();
+  await pending;
+
+  // 旧结果被丢弃，缓存里不该有它
+  assert.equal(monitor.quotaCache, null, '旧账号的额度不该写进缓存');
+
+  // 新账号重新查，得到自己的数字（剩 800）
+  const ledger = await monitor.quota(true);
+  assert.equal(ledger.credit.remain, 800);
+});
+
+test('换号后旧查询结束不会清掉新查询的在途引用（单飞去重不失效）', async () => {
+  let releaseA;
+  const gateA = new Promise((r) => { releaseA = r; });
+  let releaseB;
+  const gateB = new Promise((r) => { releaseB = r; });
+  const cnb = fakeCnb();
+  let n = 0;
+  cnb.readQuota = async () => {
+    n += 1;
+    if (n === 1) await gateA; else await gateB;
+    return { quota: { credit_in_milli: { total: 1_000_000 } }, volume: { credit_in_milli: 1_000_000, freeze_credit_in_milli: 0 }, special: null, failures: [] };
+  };
+  const monitor = makeMonitor(cnb);
+  const a = monitor.quota(true);                 // 旧账号在途
+  monitor.replaceCredentials({ token: 'nk-other', repo: 'acme/gateway', proxyKey: 'sk-2' });
+  const b = monitor.quota(true);                 // 新账号在途（引用应为 b）
+  const bRef = monitor.quotaInFlight;
+  releaseA();                                    // 旧查询结束
+  await a;
+  assert.equal(monitor.quotaInFlight, bRef, '旧查询的 finally 不该清掉新查询的引用');
+  // 此时再查应复用 b，不再发第 3 次
+  const calls = n;
+  releaseB();
+  await b;
+  await monitor.quota();                          // 命中缓存或不新增
+  assert.ok(n <= 2, `不该发第 3 次 readQuota，实际 ${n} 次（此前 ${calls}）`);
+});

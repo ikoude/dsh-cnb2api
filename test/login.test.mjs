@@ -30,16 +30,11 @@ function mount(initial = { accounts: [] }) {
     Object.defineProperty(config, key, { get: () => parsed[key], enumerable: true });
   }
   const routes = [];
-  const registered = [];
   const ctx = {
   tools: { register() {} },
   webServer: { register: (route) => { routes.push(route); return () => {}; } },
   // 可选服务（设置/凭据/配置编辑器）在没有时应当降级
   get: () => undefined,
-  // llm 服务桩：只记录注册，测试关心的是"有没有把供应商挂上去"
-  llm: { registerAdapter: (providers, adapter) => { registered.push({ providers, adapter }); return () => {}; } },
-  // ctx.inject 在真 DSH 里等到服务就绪再执行；测试里服务视为已就绪
-  inject: (deps, cb) => { cb(ctx); },
   effect: (fn) => { fn(); return () => {}; },
   };
   plugin.apply(ctx, config);
@@ -158,4 +153,74 @@ test('登录：用户名名下有仓库时才作为「个人空间」出现', as
   assert.equal(mine.personal, true, '应标为个人空间');
   const acme = reply.body.orgDetails.find((o) => o.name === 'acme');
   assert.equal(acme.personal, false);
+});
+
+
+test('PROXY_KEY 校验：上游非鉴权错误翻成人话，不再抛 ReferenceError', async () => {
+  // 这条分支从 0.9.8 起引用了不存在的 explainUpstreamError，
+  // 只要上游回 400/429/5xx 整个路由就会 ReferenceError。走完整路由覆盖它。
+  const repo = 'acme/gateway';
+  const gateway = 'https://abc123-41729.cnb.run';
+  const base = backend({
+    repos: [{ path: repo }],
+    workspaces: [{ sn: 'ws-1', status: 'running', slug: repo }],
+  });
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(typeof input === 'string' ? input : input.url);
+    // 工作区详情给出网关地址
+    if (url.pathname.includes('/workspace/detail/')) {
+      return Response.json({ webide: `${gateway}/x` });
+    }
+    // 探测：健康检查通过，模型接口回 500
+    if (url.origin === new URL(gateway).origin) {
+      if (url.pathname === '/health') return Response.json({ status: 'ok' });
+      if (url.pathname === '/v1/models') {
+        return new Response('{"message":"boom"}', { status: 500 });
+      }
+    }
+    return base(input, init);
+  };
+  const reply = await post(mount()('/cnb2api/login/proxy-key'), {
+    token: 'nk-good', repo, proxyKey: 'sk-test',
+  });
+  assert.equal(reply.code, 200);
+  assert.equal(reply.body.ok, false);
+  assert.match(reply.body.reason, /网关内部错误 · HTTP 500/, `实际：${reply.body.reason}`);
+  assert.match(reply.body.reason, /boom/);
+});
+
+test('PROXY_KEY 校验：上游 OpenAI 风格嵌套 error 不渲染成 [object Object]', async () => {
+  const repo = 'acme/gateway';
+  const gateway = 'https://abc123-41729.cnb.run';
+  const base = backend({ repos: [{ path: repo }], workspaces: [{ sn: 'ws-1', status: 'running', slug: repo }] });
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(typeof input === 'string' ? input : input.url);
+    if (url.pathname.includes('/workspace/detail/')) return Response.json({ webide: `${gateway}/x` });
+    if (url.origin === new URL(gateway).origin) {
+      if (url.pathname === '/health') return Response.json({ status: 'ok' });
+      if (url.pathname === '/v1/models') return new Response('{"error":{"message":"bad gateway upstream"}}', { status: 502 });
+    }
+    return base(input, init);
+  };
+  const reply = await post(mount()('/cnb2api/login/proxy-key'), { token: 'nk-good', repo, proxyKey: 'sk-test' });
+  assert.equal(reply.body.ok, false);
+  assert.match(reply.body.reason, /bad gateway upstream/);
+  assert.equal(/object Object/.test(reply.body.reason), false);
+});
+
+test('登录只查一次 /user：身份在组织/额度查询之间复用', async () => {
+  const calls = [];
+  const base = backend({
+    repos: [{ path: 'alice/notes' }, { path: 'acme/gateway' }],
+    groups: [{ path: 'gamma' }],
+  });
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(typeof input === 'string' ? input : input.url);
+    calls.push(url.pathname);
+    return base(input, init);
+  };
+  const reply = await post(mount()('/cnb2api/login/token'), { token: 'nk-good' });
+  assert.equal(reply.code, 200);
+  const userCalls = calls.filter((p) => p === '/user').length;
+  assert.equal(userCalls, 1, `/user 应只查一次，实际 ${userCalls} 次：${calls.join(',')}`);
 });

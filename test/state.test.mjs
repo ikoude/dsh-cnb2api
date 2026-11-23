@@ -18,7 +18,6 @@ const facts = (over) => ({
   creditExhausted: false,
   broken: false,
   starting: false,
-  known: true,
   ...over,
 });
 
@@ -104,6 +103,6 @@ test('每个状态码都有各自的徽标，没有共用兜底', () => {
 });
 
 test('还没查到结论时显示「识别中」，不是「未知」', () => {
-  assert.equal(stateOf({ ...facts({ known: false }), lifecycle: null }), STATE.unknown);
+  assert.equal(stateOf({ ...facts(), lifecycle: null }), STATE.unknown);
   assert.equal(badgeOf(STATE.unknown), 'checking');
 });
