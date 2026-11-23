@@ -277,21 +277,16 @@ test('状态面板只对自己的插件页渲染', () => {
   assert.equal(panel({}), null);
 });
 
-test('界面注册三处：悬浮球、详情页区块、行配置表单', () => {
+test('界面注册五处：悬浮球、详情页区块、行配置、包配置、头部按钮', () => {
   const rt = runtime();
   const { owners } = mount('dsh-cnb2api', { React: rt.React });
   assert.deepEqual(owners.sort(), [
+    'plugins.bundle.config',
+    'plugins.detail.actions',
     'plugins.detail.section',
     'plugins.row.config',
     'shell.overlay',
   ]);
-});
-
-test('不在详情页头部再放一个「配置」按钮（行页自带配置表单，会重复）', () => {
-  const rt = runtime();
-  const { owners } = mount('dsh-cnb2api', { React: rt.React });
-  assert.ok(!owners.includes('plugins.detail.actions'),
-    '行详情页已有配置区，再加按钮既重复、点了也等于走进自己');
 });
 
 test('悬浮球挂在 shell.overlay（全窗口浮层），不在对话区', () => {
@@ -1040,4 +1035,37 @@ test('百分比传成字符串也能画进度条', async () => {
   await new Promise((resolve) => { setTimeout(resolve, 20); });
   const text = JSON.stringify(flatten(rt.render(view.type, view.props), rt));
   assert.match(text, /50\.00%/, '字符串百分比也要正常显示');
+});
+
+// —— 配置入口：包详情页 + 头部按钮 ——
+
+test('配置同时注册到包详情页（plugins.bundle.config）', () => {
+  const rt = runtime();
+  const { registered } = mount('dsh-cnb2api', { React: rt.React, formValue: SAMPLE });
+  const rowEntry = registered.find((r) => r.options.name === 'plugins.row.config');
+  const bundleEntry = registered.find((r) => r.options.name === 'plugins.bundle.config');
+  assert.ok(bundleEntry, '要有 plugins.bundle.config 注册');
+  // 包名 = row key 里 # 之前那段
+  const pkgName = String(rowEntry.options.key).split('#')[0];
+  assert.equal(bundleEntry.options.key, pkgName, 'bundle.config 的 key 必须是包名');
+
+  // 渲染出来应是同一份表单（有账号的令牌输入框）
+  const tree = flatten(bundleEntry.component({ view: 'page' }), rt);
+  const ids = nodesOf(tree, ['input']).map((n) => String(n.props.id || ''));
+  assert.ok(ids.some((id) => /-token$/.test(id)), '包详情页应渲染出账号表单');
+});
+
+test('详情页头部有「配置」按钮，且只对自己的插件出现', () => {
+  const rt = runtime();
+  const { registered } = mount('dsh-cnb2api', { React: rt.React, formValue: SAMPLE });
+  const rowEntry = registered.find((r) => r.options.name === 'plugins.row.config');
+  const pkgName = String(rowEntry.options.key).split('#')[0];
+  const entry = registered.find((r) => r.options.name === 'plugins.detail.actions');
+  assert.ok(entry, '要有 plugins.detail.actions 注册');
+
+  assert.equal(entry.component({ subject: { kind: 'bundle', pkg: { name: 'other-plugin' } } }), null,
+    '别的插件页不该出现我们的按钮');
+  const button = entry.component({ subject: { kind: 'bundle', pkg: { name: pkgName } } });
+  assert.ok(button, '自己的插件页要出现按钮');
+  assert.equal(button.kids.join(''), '配置');
 });

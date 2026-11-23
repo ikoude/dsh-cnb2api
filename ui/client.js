@@ -145,6 +145,7 @@ window.__ModuleLoader__.load({
         dupRepo: '同一个仓库只能有一个账号',
         intervalMin: '巡检间隔不能小于 30 秒',
         general: '全局',
+        openSettings: '配置',
         groupCheck: '巡检',
         groupGateway: '网关',
         groupCredit: '余额与提示',
@@ -309,6 +310,7 @@ window.__ModuleLoader__.load({
         dupRepo: 'One account per repository',
         intervalMin: 'The check interval cannot be less than 30 seconds',
         general: 'General',
+        openSettings: 'Configure',
         groupCheck: 'Monitoring',
         groupGateway: 'Gateway',
         groupCredit: 'Credit & alerts',
@@ -2209,14 +2211,44 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
           onOpen: () => openPanel('plugins'),
         })));
 
-        // Configuration form, opened from the plugin row.
+        // Configuration form. 同一份 ConfigForm 供两个入口：
+        //   · plugins.row.config    「包含的组件 → cnb2api」那一层的页面
+        //   · plugins.bundle.config 整个包的详情页（不用再点进组件）
+        // 两处渲染的是同一个 form 实例，改哪边都是同一份配置，不会分叉。
         const form = ctx.configForms.get(ENTRY);
+        const renderConfig = (view) => (view === 'summary'
+          ? table().form.title
+          : h(ConfigForm, { form }));
+
         ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
           name: 'plugins.row.config',
           key: ROW_KEY,
-        }, ({ view }) => {
-          if (view === 'summary') return table().form.title;
-          return h(ConfigForm, { form });
+        }, ({ view }) => renderConfig(view)));
+
+        ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
+          name: 'plugins.bundle.config',
+          key: PACKAGE,
+        }, ({ view }) => renderConfig(view)));
+
+        // 详情页头部右侧加一个「配置」按钮（和别的插件一样），点了滚到配置区。
+        // bundle 页与 row 页的配置区都带 data-plugin-config，所以一处按钮两页通用。
+        ctx.slots.inject('plugins.detail.actions', () => ctx.slots.register({
+          name: 'plugins.detail.actions',
+          id: 'cnb2api-configure',
+          order: 10,
+        }, ({ subject }) => {
+          if (subject?.pkg?.name !== PACKAGE) return null;
+          return h('button', {
+            type: 'button',
+            className: 'cnb2api-btn',
+            'data-v': 'outline',
+            onClick: () => {
+              const target = document.querySelector('[data-plugin-config]');
+              if (target && typeof target.scrollIntoView === 'function') {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            },
+          }, table().form.openSettings);
         }));
       },
     };
