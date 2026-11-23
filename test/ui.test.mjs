@@ -166,7 +166,7 @@ function mount(id, { React, fetchImpl, formValue, writable = true } = {}) {
   });
   // 两条注册分别属于两个槽位，测试要的是其中一个
   const pick = (slotName) => registered.find((row) => row.options.name === slotName);
-  const formEntry = pick('plugins.row.config');
+  const formEntry = pick('plugins.bundle.config') ?? pick('plugins.row.config');
   const panelEntry = pick('plugins.detail.section');
   return {
     owners,
@@ -277,16 +277,22 @@ test('状态面板只对自己的插件页渲染', () => {
   assert.equal(panel({}), null);
 });
 
-test('界面注册五处：悬浮球、详情页区块、行配置、包配置、头部按钮', () => {
+test('界面注册四处：详情页配置、详情页区块、插件页标签、悬浮球', () => {
   const rt = runtime();
   const { owners } = mount('dsh-cnb2api', { React: rt.React });
   assert.deepEqual(owners.sort(), [
     'plugins.bundle.config',
-    'plugins.detail.actions',
     'plugins.detail.section',
-    'plugins.row.config',
+    'plugins.tab',
     'shell.overlay',
   ]);
+});
+
+test('不注册行配置与头部按钮：设置只在详情页一处', () => {
+  const rt = runtime();
+  const { owners } = mount('dsh-cnb2api', { React: rt.React });
+  assert.ok(!owners.includes('plugins.row.config'), '组件行不该是可点的设置入口');
+  assert.ok(!owners.includes('plugins.detail.actions'), '详情页已有表单，不需要额外按钮');
 });
 
 test('悬浮球挂在 shell.overlay（全窗口浮层），不在对话区', () => {
@@ -346,10 +352,11 @@ test('拖动阈值：位移小于 4px 视为点击，超过才移动', () => {
   assert.deepEqual(after.props.style, start, '小于阈值的抖动不该移动球');
 });
 
-test('配置表单的 key 与行 id 对得上', () => {
+test('配置表单注册在包名上（详情页入口，不再是 row key）', () => {
   const rt = runtime();
   const { options } = mount('dsh-cnb2api', { React: rt.React });
-  assert.equal(options.key, 'dsh-cnb2api#cnb2api');
+  assert.equal(options.key, 'dsh-cnb2api');
+  assert.ok(!String(options.key).includes('#'), 'bundle.config 的 key 是包名，不带 #row');
 });
 
 test('配置表单：已登录的账号显示组织与仓库下拉，而不是文本框', async () => {
@@ -1037,35 +1044,36 @@ test('百分比传成字符串也能画进度条', async () => {
   assert.match(text, /50\.00%/, '字符串百分比也要正常显示');
 });
 
-// —— 配置入口：包详情页 + 头部按钮 ——
 
-test('配置同时注册到包详情页（plugins.bundle.config）', () => {
+// —— 配置入口：只在包详情页 ——
+
+test('配置渲染在包详情页（plugins.bundle.config），key 是包名', () => {
   const rt = runtime();
   const { registered } = mount('dsh-cnb2api', { React: rt.React, formValue: SAMPLE });
-  const rowEntry = registered.find((r) => r.options.name === 'plugins.row.config');
-  const bundleEntry = registered.find((r) => r.options.name === 'plugins.bundle.config');
-  assert.ok(bundleEntry, '要有 plugins.bundle.config 注册');
-  // 包名 = row key 里 # 之前那段
-  const pkgName = String(rowEntry.options.key).split('#')[0];
-  assert.equal(bundleEntry.options.key, pkgName, 'bundle.config 的 key 必须是包名');
-
-  // 渲染出来应是同一份表单（有账号的令牌输入框）
-  const tree = flatten(bundleEntry.component({ view: 'page' }), rt);
+  const entry = registered.find((r) => r.options.name === 'plugins.bundle.config');
+  assert.ok(entry, '要有 plugins.bundle.config 注册');
+  assert.ok(String(entry.options.key).length > 0, 'key 不能为空');
+  const tree = flatten(entry.component({ view: 'page' }), rt);
   const ids = nodesOf(tree, ['input']).map((n) => String(n.props.id || ''));
-  assert.ok(ids.some((id) => /-token$/.test(id)), '包详情页应渲染出账号表单');
+  assert.ok(ids.some((id) => /-token$/.test(id)), '详情页应渲染出账号表单');
 });
 
-test('详情页头部有「配置」按钮，且只对自己的插件出现', () => {
-  const rt = runtime();
-  const { registered } = mount('dsh-cnb2api', { React: rt.React, formValue: SAMPLE });
-  const rowEntry = registered.find((r) => r.options.name === 'plugins.row.config');
-  const pkgName = String(rowEntry.options.key).split('#')[0];
-  const entry = registered.find((r) => r.options.name === 'plugins.detail.actions');
-  assert.ok(entry, '要有 plugins.detail.actions 注册');
 
-  assert.equal(entry.component({ subject: { kind: 'bundle', pkg: { name: 'other-plugin' } } }), null,
-    '别的插件页不该出现我们的按钮');
-  const button = entry.component({ subject: { kind: 'bundle', pkg: { name: pkgName } } });
-  assert.ok(button, '自己的插件页要出现按钮');
-  assert.equal(button.kids.join(''), '配置');
+test('插件页 CNB2API 标签里同时有状态面板与配置表单', () => {
+  const rt = runtime();
+  const { registered } = mount('dsh-cnb2api', {
+    React: rt.React,
+    formValue: SAMPLE,
+    fetchImpl: async () => ({ ok: true, json: async () => ({ configured: true, accounts: [] }) }),
+  });
+  const tab = registered.find((r) => r.options.name === 'plugins.tab');
+  assert.ok(tab, '要注册 plugins.tab');
+  assert.equal(tab.options.id, 'cnb2api');
+  assert.equal(tab.options.label, 'CNB2API');
+
+  const tree = flatten(rt.render(tab.component, {}), rt);
+  const ids = nodesOf(tree, ['input']).map((n) => String(n.props.id || ''));
+  assert.ok(ids.some((id) => /-token$/.test(id)), '标签里要有账号配置表单');
+  const text = JSON.stringify(tree);
+  assert.ok(text.includes('工作区状态') || text.includes('刷新'), '标签里要有状态面板');
 });

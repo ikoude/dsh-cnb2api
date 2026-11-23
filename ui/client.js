@@ -18,8 +18,6 @@ window.__ModuleLoader__.load({
       createElement: h, Fragment, useState, useEffect, useRef, useCallback,
     } = React;
 
-    /** Row id declared by cordis.patch.yml: `<package>#<row id>`. */
-    const ROW_KEY = 'dsh-cnb2api#cnb2api';
     const PACKAGE = 'dsh-cnb2api';
     /** Host plugin entry id — the configuration namespace. */
     const ENTRY = 'cnb2api';
@@ -145,7 +143,6 @@ window.__ModuleLoader__.load({
         dupRepo: '同一个仓库只能有一个账号',
         intervalMin: '巡检间隔不能小于 30 秒',
         general: '全局',
-        openSettings: '配置',
         groupCheck: '巡检',
         groupGateway: '网关',
         groupCredit: '余额与提示',
@@ -310,7 +307,6 @@ window.__ModuleLoader__.load({
         dupRepo: 'One account per repository',
         intervalMin: 'The check interval cannot be less than 30 seconds',
         general: 'General',
-        openSettings: 'Configure',
         groupCheck: 'Monitoring',
         groupGateway: 'Gateway',
         groupCredit: 'Credit & alerts',
@@ -2211,45 +2207,28 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
           onOpen: () => openPanel('plugins'),
         })));
 
-        // Configuration form. 同一份 ConfigForm 供两个入口：
-        //   · plugins.row.config    「包含的组件 → cnb2api」那一层的页面
-        //   · plugins.bundle.config 整个包的详情页（不用再点进组件）
-        // 两处渲染的是同一个 form 实例，改哪边都是同一份配置，不会分叉。
+        // 配置只有一个入口：**插件详情页**（plugins.bundle.config，key = 包名）。
+        //
+        // 不再注册 plugins.row.config：那会把设置放进「包含的组件 → cnb2api」，
+        // 用户得先进组件才能配；而且行标题会变成可点入口，多一套重复的表单。
+        // 也不注册 plugins.detail.actions 的「配置」按钮：人都已经在详情页、
+        // 表单就在眼前，再放一个按钮只会让人以为要跳转。
         const form = ctx.configForms.get(ENTRY);
-        const renderConfig = (view) => (view === 'summary'
-          ? table().form.title
-          : h(ConfigForm, { form }));
-
-        ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
-          name: 'plugins.row.config',
-          key: ROW_KEY,
-        }, ({ view }) => renderConfig(view)));
-
         ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
           name: 'plugins.bundle.config',
           key: PACKAGE,
-        }, ({ view }) => renderConfig(view)));
+        }, ({ view }) => (view === 'summary' ? table().form.title : h(ConfigForm, { form }))));
 
-        // 详情页头部右侧加一个「配置」按钮（和别的插件一样），点了滚到配置区。
-        // bundle 页与 row 页的配置区都带 data-plugin-config，所以一处按钮两页通用。
-        ctx.slots.inject('plugins.detail.actions', () => ctx.slots.register({
-          name: 'plugins.detail.actions',
-          id: 'cnb2api-configure',
-          order: 10,
-        }, ({ subject }) => {
-          if (subject?.pkg?.name !== PACKAGE) return null;
-          return h('button', {
-            type: 'button',
-            className: 'cnb2api-btn',
-            'data-v': 'outline',
-            onClick: () => {
-              const target = document.querySelector('[data-plugin-config]');
-              if (target && typeof target.scrollIntoView === 'function') {
-                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }
-            },
-          }, table().form.openSettings);
-        }));
+        // 插件页标签：在「已安装 / 发现」旁边加一个 CNB2API 页，
+        // 状态面板和配置表单都放在这里，不必先点进某个插件的详情页。
+        ctx.slots.inject('plugins.tab', () => ctx.slots.register({
+          name: 'plugins.tab',
+          id: 'cnb2api',
+          label: 'CNB2API',
+          order: 20,
+        }, () => h('div', { className: 'cnb2api cnb2api-sec' },
+          h(StatusPanel, null),
+          h(ConfigForm, { form }))));
       },
     };
   },
