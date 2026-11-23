@@ -71,7 +71,9 @@ test('登录：令牌可用时返回用户名与可访问的组织', async () =>
   assert.equal(reply.code, 200);
   assert.equal(reply.body.ok, true);
   assert.equal(reply.body.username, 'alice');
-  assert.deepEqual([...reply.body.orgs].sort(), ['acme', 'alice', 'beta', 'gamma']);
+  // alice 是用户名，但名下没有仓库 → 不该混进组织列表
+  assert.deepEqual([...reply.body.orgs].sort(), ['acme', 'beta', 'gamma']);
+  assert.deepEqual(reply.body.orgDetails.map((o) => o.name).sort(), ['acme', 'beta', 'gamma']);
 });
 
 test('登录：令牌无效时 401 并说明怎么修', async () => {
@@ -145,4 +147,15 @@ test('登录：组织列表可以单独重取', async () => {
   assert.equal(reply.code, 200);
   assert.ok(reply.body.orgs.includes('acme'));
   assert.ok(reply.body.orgs.includes('delta'));
+});
+
+test('登录：用户名名下有仓库时才作为「个人空间」出现', async () => {
+  globalThis.fetch = backend({ repos: [{ path: 'alice/notes' }, { path: 'acme/gateway' }] });
+  const reply = await post(mount()('/cnb2api/login/token'), { token: 'nk-good' });
+  const names = reply.body.orgs.sort();
+  assert.deepEqual(names, ['acme', 'alice']);
+  const mine = reply.body.orgDetails.find((o) => o.name === 'alice');
+  assert.equal(mine.personal, true, '应标为个人空间');
+  const acme = reply.body.orgDetails.find((o) => o.name === 'acme');
+  assert.equal(acme.personal, false);
 });

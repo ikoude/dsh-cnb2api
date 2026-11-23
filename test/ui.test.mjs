@@ -277,13 +277,12 @@ test('状态面板只对自己的插件页渲染', () => {
   assert.equal(panel({}), null);
 });
 
-test('界面注册四处：详情页配置、详情页区块、插件页标签、悬浮球', () => {
+test('界面只注册三处：详情页配置、详情页区块、悬浮球', () => {
   const rt = runtime();
   const { owners } = mount('dsh-cnb2api', { React: rt.React });
   assert.deepEqual(owners.sort(), [
     'plugins.bundle.config',
     'plugins.detail.section',
-    'plugins.tab',
     'shell.overlay',
   ]);
 });
@@ -945,15 +944,19 @@ test('账号卡可折叠：卡片带折叠按钮与状态属性', () => {
   const cards = tree.kids.filter((kid) => kid && typeof kid.type === 'function' && kid.props.row);
   const card = rt.render(cards[0].type, cards[0].props);
 
-  // 默认展开
-  assert.equal(card.props['data-collapsed'], undefined, '默认展开');
+  // 账号默认收起（账号多时一进来是行式摘要）
+  assert.equal(card.props['data-collapsed'], 'true', '新配置默认收起');
   // 卡片头有折叠按钮（箭头），点击后折叠
   const chevron = card.kids[0].kids.find(
     (kid) => kid && kid.type === 'button' && kid.props.className.includes('cnb2api-chevron'),
   );
   assert.ok(chevron, '要有折叠按钮');
-  assert.equal(chevron.kids.join(''), '▾');
+  assert.equal(chevron.kids.join(''), '▸', '收起态应显示展开箭头');
   assert.equal(typeof chevron.props.onClick, 'function', '折叠按钮要可点');
+  const open = rt.render(cards[0].type, { ...cards[0].props, collapsed: false });
+  assert.equal(open.props['data-collapsed'], undefined, '展开态不标记折叠');
+  assert.equal(open.kids[0].kids.find((kid) => kid && kid.type === 'button'
+    && kid.props.className.includes('cnb2api-chevron')).kids.join(''), '▾');
   // 折叠由父组件控制（账号多时「收起全部」一并收起），
   // 这里验证卡片对 collapsed 属性的响应即可。
   const folded = rt.render(cards[0].type, { ...cards[0].props, collapsed: true });
@@ -1059,21 +1062,4 @@ test('配置渲染在包详情页（plugins.bundle.config），key 是包名', (
 });
 
 
-test('插件页 CNB2API 标签里同时有状态面板与配置表单', () => {
-  const rt = runtime();
-  const { registered } = mount('dsh-cnb2api', {
-    React: rt.React,
-    formValue: SAMPLE,
-    fetchImpl: async () => ({ ok: true, json: async () => ({ configured: true, accounts: [] }) }),
-  });
-  const tab = registered.find((r) => r.options.name === 'plugins.tab');
-  assert.ok(tab, '要注册 plugins.tab');
-  assert.equal(tab.options.id, 'cnb2api');
-  assert.equal(tab.options.label, 'CNB2API');
 
-  const tree = flatten(rt.render(tab.component, {}), rt);
-  const ids = nodesOf(tree, ['input']).map((n) => String(n.props.id || ''));
-  assert.ok(ids.some((id) => /-token$/.test(id)), '标签里要有账号配置表单');
-  const text = JSON.stringify(tree);
-  assert.ok(text.includes('工作区状态') || text.includes('刷新'), '标签里要有状态面板');
-});

@@ -103,6 +103,8 @@ window.__ModuleLoader__.load({
         org: '组织',
         orgHint: '列出令牌能访问的组织',
         pickOrg: '选择组织…',
+        personal: '个人空间',
+        quotaUnknown: '额度未知',
         noOrgs: '这个令牌没有可访问的组织',
         repoHint: '列出该组织下的仓库；带「运行中」的说明已有工作区',
         pickRepo: '选择仓库…',
@@ -267,6 +269,8 @@ window.__ModuleLoader__.load({
         org: 'Organisation',
         orgHint: 'Organisations this token can reach',
         pickOrg: 'Choose an organisation…',
+        personal: 'personal',
+        quotaUnknown: 'credit unknown',
         noOrgs: 'This token reaches no organisation',
         repoHint: 'Repositories in that organisation; “running” means it already has a workspace',
         pickRepo: 'Choose a repository…',
@@ -688,6 +692,40 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
       }, [read]);
 
       return { ...view, reload: read };
+    }
+
+    /**
+     * 组织候选归一：优先用宿主给的 `orgDetails`（含每个组织的额度），
+     * 退回纯名字数组（旧版宿主或测试桩）。
+     * @param {object} body - 登录接口返回。
+     * @returns {Array<{name: string, personal: boolean, credit: object|null}>} 候选。
+     */
+    function normalizeOrgs(body) {
+      const details = Array.isArray(body?.orgDetails) ? body.orgDetails : null;
+      if (details && details.length > 0) {
+        return details.map((row) => ({
+          name: String(row.name),
+          personal: row.personal === true,
+          credit: row.credit || null,
+        }));
+      }
+      return (Array.isArray(body?.orgs) ? body.orgs : []).map((name) => ({
+        name: String(name), personal: false, credit: null,
+      }));
+    }
+
+    /**
+     * 组织下拉的标签：标出「个人空间」并带上该组织的可用额度 ——
+     * 不知道每个组织还剩多少额度，就没法判断该选哪个。
+     * @param {object} org - 归一后的组织。
+     * @param {object} t - 文案表。
+     * @returns {string} 下拉标签。
+     */
+    function orgLabel(org, t) {
+      const base = org.personal ? `${org.name} (${t.form.personal})` : org.name;
+      if (!org.credit) return `${base} · ${t.form.quotaUnknown}`;
+      const lead = org.credit.exhausted ? t.panel.exhausted : t.panel.remaining;
+      return `${base} · ${lead} ${formatNum(org.credit.remain)}/${formatNum(org.credit.total)} cr`;
     }
 
     /** One account row inside the panel. */
@@ -1119,7 +1157,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
             return;
           }
           setAuth({ phase: 'ready', message: null, username: body.username });
-          setOrgs(body.orgs || []);
+          setOrgs(normalizeOrgs(body));
           // A repo already saved is kept; its org list just needs to include it.
           if (row.repo) await loadRepos(org);
         } catch (error) {
@@ -1151,7 +1189,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
       // 把它自己的组织补进选项，界面才不会是一片空的。
       const orgOptions = orgs.length > 0
         ? orgs
-        : (org ? [org] : []);
+        : (org ? [{ name: org }] : []);
       const name = row.repo || `${t.form.title} ${index + 1}`;
 
       return h('div', {
@@ -1241,7 +1279,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
             placeholder: t.form.pickOrg,
             // 只有 1 个组织时选它也等于没得选，但仍要显示出来（用户能看懂自己接在哪）
             disabled: disabled || orgOptions.length === 1,
-            options: orgOptions.map((value) => ({ value, label: value })),
+            options: orgOptions.map((item) => ({ value: item.name, label: orgLabel(item, t) })),
             onChange: (value) => {
               // 换组织就清掉仓库：旧仓库不属于新组织
               onChange({ repo: value });
@@ -1400,7 +1438,10 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
           return;
         }
         const value = snapshot.value || {};
-        setRows((Array.isArray(value.accounts) ? value.accounts : []).map(toDraft));
+        const seeded = (Array.isArray(value.accounts) ? value.accounts : []).map(toDraft);
+        setRows(seeded);
+        // 账号默认收起：账号多时一进来就是一行一个，不把页面撑长
+        setFolded(new Set(seeded.map((item) => item._id)));
         setGeneral({
           checkSeconds: String(Number(value.checkSeconds) || 120),
           autoStart: value.autoStart !== false,
@@ -1425,7 +1466,10 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
 
       const discard = () => {
         const value = form.getSnapshot().value || {};
-        setRows((Array.isArray(value.accounts) ? value.accounts : []).map(toDraft));
+        const seeded = (Array.isArray(value.accounts) ? value.accounts : []).map(toDraft);
+        setRows(seeded);
+        // 账号默认收起：账号多时一进来就是一行一个，不把页面撑长
+        setFolded(new Set(seeded.map((item) => item._id)));
         setGeneral({
           checkSeconds: String(Number(value.checkSeconds) || 120),
           autoStart: value.autoStart !== false,
@@ -1539,7 +1583,10 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
             'data-v': 'outline',
             disabled: !writable,
             onClick: () => {
-              setRows((prev) => [...prev, blank()]);
+              const row = blank();
+              setRows((prev) => [...prev, row]);
+              // 新加的行一定展开，否则用户点「添加」看不到输入框
+              setFolded((prev) => { const next = new Set(prev); next.delete(row._id); return next; });
               setDirty(true);
               setNote(null);
             },
@@ -2219,16 +2266,6 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
           key: PACKAGE,
         }, ({ view }) => (view === 'summary' ? table().form.title : h(ConfigForm, { form }))));
 
-        // 插件页标签：在「已安装 / 发现」旁边加一个 CNB2API 页，
-        // 状态面板和配置表单都放在这里，不必先点进某个插件的详情页。
-        ctx.slots.inject('plugins.tab', () => ctx.slots.register({
-          name: 'plugins.tab',
-          id: 'cnb2api',
-          label: 'CNB2API',
-          order: 20,
-        }, () => h('div', { className: 'cnb2api cnb2api-sec' },
-          h(StatusPanel, null),
-          h(ConfigForm, { form }))));
       },
     };
   },
