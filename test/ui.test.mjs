@@ -182,6 +182,25 @@ function mount(id, { React, fetchImpl, formValue, writable = true, document: doc
   };
 }
 
+
+/**
+ * 渲染状态面板并展开。
+ *
+ * 面板默认收成一行摘要（设置页信息量大），要断言账号细节的用例必须先点开
+ * 左上角的折叠按钮；否则看到的只有摘要行。
+ * @param {object} rt - runtime() 返回值。
+ * @param {Function} panel - 面板组件。
+ * @returns {object} 展开后的元素树。
+ */
+function openPanel(rt, panel) {
+  const view = panel({ subject: { kind: 'bundle', pkg: { name: 'dsh-cnb2api' } } });
+  const first = rt.render(view.type, view.props);
+  const toggle = nodesOf(flatten(first, rt), ['button'])
+    .find((node) => String(node.props.className || '').includes('cnb2api-btn-icon'));
+  if (toggle && typeof toggle.props.onClick === 'function') toggle.props.onClick();
+  return rt.render(view.type, view.props);
+}
+
 /** Render a tree down to plain nodes, expanding Fragments and function components. */
 function flatten(node, rt) {
   if (node === null || node === undefined || node === false) return null;
@@ -596,7 +615,7 @@ test('状态面板：有账号时逐个列出并给出徽标', async () => {
   // 先渲染一次触发读取，等异步回来后再渲染
   rt.render(view.type, view.props);
   await new Promise((resolve) => { setTimeout(resolve, 20); });
-  const filled = rt.render(view.type, view.props);
+  const filled = openPanel(rt, panel);
   // 展开整棵树（含 Fragment 与函数组件），文本要按节点收集才完整
   const text = JSON.stringify(flatten(filled, rt));
 
@@ -692,7 +711,7 @@ test('状态面板：标出当前在用与不可用的账号', async () => {
   // 先渲染一次触发读取，等异步回来后再渲染
   rt.render(view.type, view.props);
   await new Promise((resolve) => { setTimeout(resolve, 20); });
-  const filled = rt.render(view.type, view.props);
+  const filled = openPanel(rt, panel);
 
   const collectText = (node, out = []) => {
     if (typeof node === 'string') { out.push(node); return out; }
@@ -893,6 +912,7 @@ test('余额提示：自定义文案优先，未配置时回落到默认句子',
     const view = panel({ subject: { kind: 'bundle', pkg: { name: 'dsh-cnb2api' } } });
     rt.render(view.type, view.props);
     await new Promise((resolve) => { setTimeout(resolve, 20); });
+    const expanded = openPanel(rt, panel);
     const collectText = (node, out = []) => {
       if (typeof node === 'string') { out.push(node); return out; }
       if (!node || typeof node !== 'object') return out;
@@ -1051,7 +1071,7 @@ test('百分比传成字符串也能画进度条', async () => {
   const view = panel({ subject: { kind: 'bundle', pkg: { name: 'dsh-cnb2api' } } });
   rt.render(view.type, view.props);
   await new Promise((resolve) => { setTimeout(resolve, 20); });
-  const text = JSON.stringify(flatten(rt.render(view.type, view.props), rt));
+  const text = JSON.stringify(flatten(openPanel(rt, panel), rt));
   assert.match(text, /50\.00%/, '字符串百分比也要正常显示');
 });
 
@@ -1124,7 +1144,7 @@ test('状态面板：监听局域网时列出局域网基址（baseUrl + lan）'
   const view = panel({ subject: { kind: 'bundle', pkg: { name: 'dsh-cnb2api' } } });
   rt.render(view.type, view.props);
   await new Promise((resolve) => { setTimeout(resolve, 20); });
-  const text = JSON.stringify(flatten(rt.render(view.type, view.props), rt));
+  const text = JSON.stringify(flatten(openPanel(rt, panel), rt));
   assert.match(text, /http:\/\/127\.0\.0\.1:41729\/v1/, '要显示本机基址');
   assert.match(text, /http:\/\/192\.168\.1\.20:41729\/v1/, '要显示局域网基址（完整 URL）');
   assert.equal(/http:\/\/http/.test(text), false, '不能再拼一层协议（lan 已是完整基址）');
@@ -1311,4 +1331,93 @@ test('悬浮球边界：矮窗口 clamp 不越界、拖动防重入且卸载清�
   assert.match(source, /const detachDrag = \(\) =>/, '要有统一的监听清理函数');
   assert.match(source, /useEffect\(\(\) => \(\) => detachDrag\(\), \[\]\)/, '卸载时要清理拖动监听');
   assert.match(source, /detachDrag\(\);[\s\S]{0,80}const origin =/, '新 pointerdown 先清旧会话');
+});
+
+test('备份区：范围选择、口令、本地导出导入、WebDAV 都在', () => {
+  const rt = runtime();
+  const { component } = mount('dsh-cnb2api', { React: rt.React, formValue: SAMPLE });
+  const page = rt.render(component, { view: 'page' });
+  const tree = rt.render(page.type, page.props);
+  const flat = flatten(tree, rt);
+
+  const ids = nodesOf(flat, ['select', 'input']).map((n) => String(n.props.id || ''));
+  for (const id of ['cnb2api-backup-scope', 'cnb2api-backup-pass', 'cnb2api-backup-file', 'cnb2api-webdav-url']) {
+    assert.ok(ids.includes(id), `要有 ${id}`);
+  }
+  // 口令框必须是密码类型，不能明文显示
+  const pass = nodesOf(flat, ['input']).find((n) => n.props.id === 'cnb2api-backup-pass');
+  assert.equal(pass.props.type, 'password');
+
+  const labels = collect(flat, ['button'], rt).map((b) => b.kids.join(''));
+  for (const want of ['导出', '上传', '下载']) {
+    assert.ok(labels.includes(want), `要有「${want}」按钮`);
+  }
+  // 导入是 label[for] 触发的文件选择
+  const fileLabel = nodesOf(flat, ['label']).find((n) => n.props.htmlFor === 'cnb2api-backup-file');
+  assert.ok(fileLabel, '导入要用 <label for> 触发隐藏的 file input');
+});
+
+test('备份范围三档齐全，默认全选', () => {
+  const rt = runtime();
+  const { component } = mount('dsh-cnb2api', { React: rt.React, formValue: SAMPLE });
+  const page = rt.render(component, { view: 'page' });
+  const flat = flatten(rt.render(page.type, page.props), rt);
+  const scope = nodesOf(flat, ['select']).find((n) => n.props.id === 'cnb2api-backup-scope');
+  assert.equal(scope.props.value, 'all');
+  const values = (scope.kids || []).filter((k) => k && k.props && 'value' in k.props).map((k) => k.props.value).sort();
+  assert.deepEqual(values, ['accounts', 'all', 'settings']);
+});
+
+test('WebDAV 自动备份：有开关，保存后自动上传且不自动下载', () => {
+  const source = fs.readFileSync(BUNDLE, 'utf8');
+  assert.match(source, /backupAuto: '保存后自动上传'/, '要有自动备份文案');
+  assert.match(source, /general\?\.autoBackup === true && String\(general\?\.webdavUrl/, '保存成功后才自动上传');
+  assert.match(source, /pushToWebdav\(true\)/, '自动上传是静默的');
+  // 还原仍手动：没有任何「启动/加载时自动下载并覆盖」的调用
+  assert.equal(/davDownload.*onMount|restoreFromText\(body\.content\).*useEffect/.test(source), false);
+});
+
+test('工作区状态面板默认折叠（设置页不再一进来全展开）', () => {
+  const source = fs.readFileSync(BUNDLE, 'utf8');
+  // 状态面板（StatusPanel）的 open 默认 false；悬浮球的 open 仍默认 false
+  const i = source.indexOf('function StatusPanel()');
+  const block = source.slice(i, i + 900);
+  assert.match(block, /const \[open, setOpen\] = useState\(false\)/, '状态面板默认收起');
+});
+
+test('三个设置分组（余额/其它/备份）默认折叠、可展开', () => {
+  const rt = runtime();
+  const { component } = mount('dsh-cnb2api', { React: rt.React, formValue: SAMPLE });
+  const page = rt.render(component, { view: 'page' });
+  const tree = flatten(rt.render(page.type, page.props), rt);
+
+  const groups = nodesOf(tree, ['div'])
+    .filter((n) => String(n.props.className || '').split(/\s+/).includes('cnb2api-group'));
+  assert.equal(groups.length, 3, '应有余额/其它/备份三个可折叠分组');
+  for (const g of groups) {
+    assert.equal(g.props['data-collapsed'], 'true', '默认折叠');
+    const toggle = (g.kids || []).find((k) => k && String(k.props?.className || '').includes('cnb2api-group-toggle'));
+    assert.ok(toggle, '有可点击的分组标题');
+    assert.equal(toggle.props['aria-expanded'], 'false', 'aria 反映折叠态');
+  }
+  // 巡检、网关两组仍直接展开（不是 cnb2api-group）
+  const text = JSON.stringify(tree);
+  assert.match(text, /巡检/);
+  assert.match(text, /网关/);
+});
+
+test('分组折叠不影响字段渲染：所有表单控件仍在（折叠只是 CSS 隐藏）', () => {
+  const rt = runtime();
+  const { component } = mount('dsh-cnb2api', { React: rt.React, formValue: SAMPLE });
+  const page = rt.render(component, { view: 'page' });
+  const tree = flatten(rt.render(page.type, page.props), rt);
+  const ids = new Set(nodesOf(tree, ['input', 'select']).map((n) => String(n.props.id || '')));
+  // 余额/其它/备份三组折叠后，控件仍必须在 DOM 里，否则展开后是空的
+  const expected = [
+    'cnb2api-interval', 'cnb2api-autostart', 'cnb2api-host', 'cnb2api-gwport', 'cnb2api-gwkey',
+    'cnb2api-floor', 'cnb2api-low', 'cnb2api-lowmsg', 'cnb2api-autopublish',
+    'cnb2api-models', 'cnb2api-locale', 'cnb2api-backup-scope', 'cnb2api-backup-pass', 'cnb2api-webdav-url',
+  ];
+  const missing = expected.filter((id) => !ids.has(id));
+  assert.deepEqual(missing, [], `折叠后仍应渲染全部控件，缺：${missing.join(',')}`);
 });

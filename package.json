@@ -1,6 +1,6 @@
 {
   "name": "dsh-cnb2api",
-  "version": "0.9.11",
+  "version": "0.9.12",
   "description": "Uses the cnb2api gateway in your own CNB workspace as a DSH model provider: follows the address that changes on every restart, restarts a stopped workspace, and shows its AI credits and core-hours.",
   "license": "MIT",
   "author": "ikoude",

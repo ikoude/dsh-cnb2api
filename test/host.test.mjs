@@ -104,11 +104,14 @@ function call(route, { url = '/', method = 'GET' } = {}) {
   });
 }
 
-test('装配：三个工具与六条自用路由', () => {
+test('装配：三个工具与九条自用路由', () => {
   globalThis.fetch = backend().impl;
   const host = mount({ accounts: [] });
   assert.deepEqual([...host.tools.keys()].sort(), ['cnb2api_quota', 'cnb2api_start', 'cnb2api_status']);
   assert.deepEqual(host.routes.map((row) => `${row.kind} ${row.path}`).sort(), [
+    'exact /cnb2api/backup/export',
+    'exact /cnb2api/backup/import',
+    'exact /cnb2api/backup/webdav',
     'exact /cnb2api/login/orgs',
     'exact /cnb2api/login/proxy-key',
     'exact /cnb2api/login/repos',
@@ -298,4 +301,22 @@ test('工具输出语言跟随 locale：auto 中文、en 英文', async () => {
   if (stateEn && enStates.includes(stateEn)) {
     assert.notEqual(stateEn, stateZh, 'en 配置下状态词应为英文');
   }
+});
+
+test('备份路由要求 application/json：挡住 text/plain 的跨域盲发', async () => {
+  globalThis.fetch = backend().impl;
+  const host = mount({ accounts: [] });
+  for (const path of ['/cnb2api/backup/export', '/cnb2api/backup/import', '/cnb2api/backup/webdav']) {
+    const route = host.route(path);
+    const reply = await new Promise((resolve) => {
+      route.handler({
+        url: path, method: 'POST',
+        headers: { 'content-type': 'text/plain' },
+        async *[Symbol.asyncIterator]() { yield Buffer.from('{}'); },
+      }, { writeHead(code) { this.code = code; }, end(text) { resolve({ code: this.code, body: JSON.parse(text || '{}') }); } });
+    });
+    assert.equal(reply.code, 415, `${path} 该拒绝 text/plain`);
+    assert.match(reply.body.reason, /application\/json/);
+  }
+  host.dispose();
 });

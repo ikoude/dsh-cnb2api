@@ -149,6 +149,33 @@ window.__ModuleLoader__.load({
         groupGateway: '网关',
         groupCredit: '余额与提示',
         groupOther: '其它',
+        groupBackup: '备份与还原',
+        backupScope: '备份内容',
+        backupScopeAccounts: '只账号',
+        backupScopeSettings: '只设置',
+        backupScopeAll: '账号 + 设置',
+        backupPassword: '加密口令',
+        backupPasswordHint: '留空导出明文 JSON（含令牌）；填了就加密，导入时要同一口令',
+        backupLocal: '本地文件',
+        backupExport: '导出',
+        backupImport: '导入',
+        backupWebdav: 'WebDAV',
+        backupWebdavUrlHint: '目录或完整文件路径；只填目录会自动补 cnb2api-backup.json',
+        backupWebdavUser: '用户名',
+        backupWebdavPassword: '密码',
+        backupUpload: '上传',
+        backupDownload: '下载',
+        backupAuto: '保存后自动上传',
+        backupAutoHint: '每次保存配置成功后自动把备份推到 WebDAV；还原仍需手动点「下载」',
+        backupAutoOk: '已自动上传',
+        backupWorking: '处理中…',
+        backupExported: '已导出备份',
+        backupImported: '已导入',
+        backupUploaded: '已上传到 WebDAV',
+        backupDownloaded: '已从 WebDAV 导入',
+        backupNoAccounts: '没有可备份的账号',
+        backupMergeNote: '合并：同仓库覆盖、新仓库追加，现有账号保留',
+        backupScopeSettingsOnly: '只备份设置 · 不含账号',
         checkSeconds: '巡检间隔（秒）',
         gatewayHost: '监听地址',
         gatewayHostHint: '0.0.0.0 局域网内其它设备也能用；127.0.0.1 只有本机能用',
@@ -316,6 +343,33 @@ window.__ModuleLoader__.load({
         groupGateway: 'Gateway',
         groupCredit: 'Credit & alerts',
         groupOther: 'Other',
+        groupBackup: 'Backup & restore',
+        backupScope: 'What to back up',
+        backupScopeAccounts: 'Accounts only',
+        backupScopeSettings: 'Settings only',
+        backupScopeAll: 'Accounts + settings',
+        backupPassword: 'Passphrase',
+        backupPasswordHint: 'Leave empty to export plain JSON (contains tokens); set one to encrypt',
+        backupLocal: 'Local file',
+        backupExport: 'Export',
+        backupImport: 'Import',
+        backupWebdav: 'WebDAV',
+        backupWebdavUrlHint: 'A folder or a full file path; a folder gets cnb2api-backup.json appended',
+        backupWebdavUser: 'Username',
+        backupWebdavPassword: 'Password',
+        backupUpload: 'Upload',
+        backupDownload: 'Download',
+        backupAuto: 'Upload after save',
+        backupAutoHint: 'Push a fresh backup to WebDAV whenever settings are saved; restore stays manual',
+        backupAutoOk: 'Auto-uploaded',
+        backupWorking: 'Working…',
+        backupExported: 'Backup exported',
+        backupImported: 'Imported',
+        backupUploaded: 'Uploaded to WebDAV',
+        backupDownloaded: 'Imported from WebDAV',
+        backupNoAccounts: 'No accounts to back up',
+        backupMergeNote: 'Merge: same repo overwritten, new repos appended, existing kept',
+        backupScopeSettingsOnly: 'Settings only · no accounts',
         checkSeconds: 'Check interval (seconds)',
         gatewayHost: 'Listen address',
         gatewayHostHint: '0.0.0.0 also serves other devices on the LAN; 127.0.0.1 is this machine only',
@@ -452,6 +506,16 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
   border: 0.5px dashed var(--dsw-alias-border-l3);
   font-size: 12px; line-height: 1.7; color: var(--dsw-alias-label-tertiary);
 }
+.cnb2api-group-toggle {
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; background: transparent; border: none; padding: 0; margin: 0;
+  cursor: pointer; font: inherit; text-align: left; color: inherit;
+}
+.cnb2api-group-toggle:hover { color: var(--dsw-alias-label-primary); }
+.cnb2api-group-toggle:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; border-radius: 3px; }
+.cnb2api-group-chevron { font-size: 10px; width: 12px; color: var(--dsw-alias-label-tertiary); }
+.cnb2api-group-body { display: flex; flex-direction: column; gap: 8px; }
+.cnb2api-group[data-collapsed="true"] > .cnb2api-group-body { display: none; }
 .cnb2api-subhead {
   font-size: 11px; font-weight: 600; color: var(--dsw-alias-label-tertiary);
   padding: 10px 0 2px; letter-spacing: .02em;
@@ -936,9 +1000,9 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
       const [busy, setBusy] = useState(null);
       const [note, setNote] = useState(null);
       const [showGatewayKey, setShowGatewayKey] = useState(false);
-      // 状态面板可折叠：默认展开，点箭头收成一行摘要（账号/可用/网关），
-      // 需要看细节时再展开。
-      const [open, setOpen] = useState(true);
+      // 状态面板可折叠：默认收成一行摘要（账号/可用/网关），需要细节时再展开。
+      // 设置页信息量大，默认全展开会把下面的配置推到很远处。
+      const [open, setOpen] = useState(false);
 
       const start = async (label) => {
         setBusy(label);
@@ -1168,6 +1232,10 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
         lowCreditMessage: String(value.lowCreditMessage || ''),
         models: String(value.models || 'deepseek-v4.1-flash'),
         creditFloorPercent: String(value.creditFloorPercent == null ? 1 : Number(value.creditFloorPercent)),
+        webdavUrl: String(value.webdavUrl || ''),
+        webdavUser: String(value.webdavUser || ''),
+        webdavPassword: String(value.webdavPassword || ''),
+        autoBackup: value.autoBackup === true,
       };
     }
 
@@ -1186,6 +1254,10 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
         lowCreditMessage: String(g.lowCreditMessage || ''),
         models: String(g.models || '').trim(),
         creditFloorPercent: Number(g.creditFloorPercent) || 0,
+        webdavUrl: String(g.webdavUrl || '').trim(),
+        webdavUser: String(g.webdavUser || '').trim(),
+        webdavPassword: String(g.webdavPassword || ''),
+        autoBackup: g.autoBackup === true,
       };
     }
 
@@ -1528,6 +1600,14 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
       const t = table(general?.locale);
       // 折叠的账号卡（下标集合）。账号多时用「收起全部」把页面压短。
       const [folded, setFolded] = useState(() => new Set());
+      // 可折叠的全局设置分组：credit/other/backup 默认收起，避免长度把页面撑长
+      const [foldedGroups, setFoldedGroups] = useState(() => new Set(['credit', 'other', 'backup']));
+      const groupFolded = (key) => foldedGroups.has(key);
+      const toggleGroup = (key) => setFoldedGroups((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key); else next.add(key);
+        return next;
+      });
       const [dirty, setDirty] = useState(false);
       const [saving, setSaving] = useState(false);
       const [note, setNote] = useState(null);
@@ -1535,6 +1615,11 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
       const [noteBar, setNoteBar] = useState('top');
       // 密钥默认遮住：配置页可能被投屏或截图
       const [showGatewayKey, setShowGatewayKey] = useState(false);
+      // 备份与还原：范围、口令、进行中的动作、结果提示
+      const [backupScope, setBackupScope] = useState('all');
+      const [backupPassword, setBackupPassword] = useState('');
+      const [backupBusy, setBackupBusy] = useState(null);
+      const [backupNote, setBackupNote] = useState(null);
       const seededAt = useRef(undefined);
       const dirtyRef = useRef(false);
       // 已保存配置的基线：取消新增行等操作后据此重算 dirty，避免假的「未保存」
@@ -1635,6 +1720,10 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
             { op: 'set', path: ['lowCreditMessage'], value: String(general.lowCreditMessage || '') },
             { op: 'set', path: ['models'], value: String(general.models || '').trim() },
             { op: 'set', path: ['creditFloorPercent'], value: Number(general.creditFloorPercent) || 0 },
+            { op: 'set', path: ['webdavUrl'], value: String(general.webdavUrl || '').trim() },
+            { op: 'set', path: ['webdavUser'], value: String(general.webdavUser || '').trim() },
+            { op: 'set', path: ['webdavPassword'], value: String(general.webdavPassword || '') },
+            { op: 'set', path: ['autoBackup'], value: general.autoBackup === true },
           ]);
           if (accepted) {
             // 保存成功后把草稿按已保存重建：否则新增行仍带 _isNew，
@@ -1645,6 +1734,12 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
             baselineRef.current = { accounts: toAccounts(rows), general: projectGeneral(general) };
             setDirty(false);
             setNote({ tone: 'ok', text: t.form.saved });
+            // 自动备份：保存成功后静默推一次；失败只提示，不影响「已保存」的结论
+            if (general?.autoBackup === true && String(general?.webdavUrl || '').trim()) {
+              pushToWebdav(true).then((ok) => {
+                if (ok) setBackupNote({ tone: 'ok', text: t.form.backupAutoOk });
+              }).catch(() => {});
+            }
           } else {
             setNote({ tone: 'error', text: t.form.saveFailed });
           }
@@ -1654,6 +1749,191 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
           setSaving(false);
         }
       };
+
+      // ---- 备份与还原 ----
+
+      /** 当前草稿里的账号（与保存时同一份序列化，避免两边形状漂移）。 */
+      const draftAccounts = () => toAccounts(rows);
+
+      /** 当前草稿里的设置（与保存时同一份投影）。 */
+      const draftSettings = () => projectGeneral(general) || {};
+
+      /** 把文本存成本地文件。 */
+      const downloadText = (text, fileName) => {
+        try {
+          const blob = new Blob([text], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = fileName;
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          // 立刻回收会让部分浏览器来不及开始下载
+          setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        } catch (error) {
+          setBackupNote({ tone: 'error', text: `保存文件失败 · ${String(error?.message || error)}` });
+        }
+      };
+
+      /** 打包当前草稿；返回备份文档对象或 null。 */
+      /** 导出到本地文件。 */
+      const exportToFile = async () => {
+        setBackupBusy('export');
+        setBackupNote(null);
+        try {
+          const doc = await packBackupDoc();
+          if (!doc) return;
+          const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+          downloadText(JSON.stringify(doc, null, 2), `cnb2api-backup-${stamp}.json`);
+          setBackupNote({ tone: 'ok', text: t.form.backupExported });
+        } finally {
+          setBackupBusy(null);
+        }
+      };
+
+      /** 还原一份备份文本：先让 Host 解析，再按合并策略写回草稿。 */
+      const restoreFromText = async (content, source) => {
+        const { ok, body } = await postJson('/cnb2api/backup/import', {
+          content,
+          password: backupPassword,
+          existing: draftAccounts(),
+        });
+        if (!ok) {
+          setBackupNote({ tone: 'error', text: body.reason || t.form.saveFailed });
+          return false;
+        }
+        // 只写了一部分字段时别把其它设置清空：按 scope 决定要不要覆盖设置
+        if (body.scope !== 'settings' && Array.isArray(body.merged)) {
+          const drafts = body.merged.map(toDraft);
+          setRows(drafts);
+          setFolded(new Set(drafts.map((item) => item._id)));
+        }
+        if (body.scope !== 'accounts' && body.settings) {
+          setGeneral((prev) => ({ ...(prev || {}), ...generalFromValue({ ...draftSettings(), ...body.settings }) }));
+        }
+        setDirty(true);
+        setNote(null);
+        const added = Number(body.added) || 0;
+        const replaced = Number(body.replaced) || 0;
+        const detail = body.scope === 'settings'
+          ? t.form.backupScopeSettingsOnly
+          : `${added} + / ${replaced} ~`;
+        setBackupNote({ tone: 'ok', text: `${source} · ${detail}` });
+        return true;
+      };
+
+      /** 从本地文件导入。 */
+      const importFromFile = async (event) => {
+        const file = event?.target?.files?.[0];
+        if (!file) return;
+        setBackupBusy('import');
+        setBackupNote(null);
+        try {
+          const text = await file.text();
+          await restoreFromText(text, t.form.backupImported);
+        } catch (error) {
+          setBackupNote({ tone: 'error', text: String(error?.message || error) });
+        } finally {
+          setBackupBusy(null);
+          if (event?.target) event.target.value = '';
+        }
+      };
+
+      /** 把当前草稿打包并推到 WebDAV；返回是否成功。手动与自动共用。 */
+      const pushToWebdav = async (silent) => {
+        // 打包失败（比如没有账号）时绝不能继续：否则会把字面量 "null" 传到 WebDAV，
+        // 覆盖掉之前那份有效备份，还谎报上传成功。
+        const doc = await packBackupDoc();
+        if (!doc) return false;
+        const { ok, body } = await postJson('/cnb2api/backup/webdav', {
+          action: 'upload',
+          url: general.webdavUrl,
+          username: general.webdavUser || '',
+          password: general.webdavPassword || '',
+          content: JSON.stringify(doc),
+        });
+        if (ok) {
+          if (!silent) setBackupNote({ tone: 'ok', text: t.form.backupUploaded });
+          return true;
+        }
+        setBackupNote({ tone: 'error', text: body?.reason || t.form.saveFailed });
+        return false;
+      };
+
+      /** 打包当前草稿（不写提示，供上传复用）。 */
+      const packBackupDoc = async () => {
+        if (backupScope !== 'settings' && draftAccounts().length === 0) {
+          setBackupNote({ tone: 'error', text: t.form.backupNoAccounts });
+          return null;
+        }
+        const { ok, body } = await postJson('/cnb2api/backup/export', {
+          scope: backupScope,
+          accounts: backupScope === 'settings' ? [] : draftAccounts(),
+          settings: backupScope === 'accounts' ? {} : draftSettings(),
+          password: backupPassword,
+        });
+        if (!ok) {
+          setBackupNote({ tone: 'error', text: body.reason || t.form.saveFailed });
+          return null;
+        }
+        return body.doc;
+      };
+
+      /** 上传到 WebDAV。 */
+      const uploadToWebdav = async () => {
+        if (!String(general?.webdavUrl || '').trim()) {
+          setBackupNote({ tone: 'error', text: t.form.backupWebdavUrlHint });
+          return;
+        }
+        setBackupBusy('upload');
+        setBackupNote(null);
+        try {
+          await pushToWebdav(false);
+        } finally {
+          setBackupBusy(null);
+        }
+      };
+
+      /** 从 WebDAV 下载并导入。 */
+      const downloadFromWebdav = async () => {
+        if (!String(general?.webdavUrl || '').trim()) {
+          setBackupNote({ tone: 'error', text: t.form.backupWebdavUrlHint });
+          return;
+        }
+        setBackupBusy('download');
+        setBackupNote(null);
+        try {
+          const { ok, body } = await postJson('/cnb2api/backup/webdav', {
+            action: 'download',
+            url: general.webdavUrl,
+            username: general.webdavUser || '',
+            password: general.webdavPassword || '',
+          });
+          if (!ok) {
+            setBackupNote({ tone: 'error', text: body.reason || t.form.saveFailed });
+            return;
+          }
+          await restoreFromText(body.content, t.form.backupDownloaded);
+        } finally {
+          setBackupBusy(null);
+        }
+      };
+
+      /** 一个可折叠的设置分组：标题可点，展开/收起正文。 */
+      const foldGroup = (key, title, children) => h('div', {
+        className: 'cnb2api-group',
+        'data-collapsed': groupFolded(key) ? 'true' : undefined,
+      },
+        h('button', {
+          type: 'button',
+          className: 'cnb2api-subhead cnb2api-group-toggle',
+          'aria-expanded': groupFolded(key) ? 'false' : 'true',
+          onClick: () => toggleGroup(key),
+        }, h('span', { className: 'cnb2api-group-chevron', 'aria-hidden': 'true' }, groupFolded(key) ? '▸' : '▾'),
+          h('span', null, title)),
+        h('div', { className: 'cnb2api-group-body' }, children));
 
       // 「保存 / 撤销」和「添加账号」同一行：加完账号手就在这儿，不用再去页面底部找。
       // 底部（全局设置之后）还会再渲染一条相同的保存栏，方便改完下面的设置就近保存。
@@ -1865,7 +2145,7 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
                 },
               }, t.form.gatewayRegenerate))),
 
-          h('div', { className: 'cnb2api-subhead' }, t.form.groupCredit),
+          foldGroup('credit', t.form.groupCredit, [
           h('div', { className: 'cnb2api-setting' },
             h('div', { className: 'cnb2api-setting-main' },
               h('label', { className: 'cnb2api-setting-label', htmlFor: 'cnb2api-floor' }, t.form.creditFloorPercent),
@@ -1959,9 +2239,9 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
                     unit: 'cr',
                   },
                 ))))),
+          ]),
 
-          h('div', { className: 'cnb2api-subhead' }, t.form.groupOther),
-
+          foldGroup('other', t.form.groupOther, [
           h('div', { className: 'cnb2api-setting' },
             h('div', { className: 'cnb2api-setting-main' },
               h('label', { className: 'cnb2api-setting-label', htmlFor: 'cnb2api-models' }, t.form.models),
@@ -2057,7 +2337,149 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
             },
             h('option', { value: 'auto' }, t.form.localeAuto),
             h('option', { value: 'zh' }, '中文'),
-            h('option', { value: 'en' }, 'English')))),
+            h('option', { value: 'en' }, 'English'))),
+          ])),
+
+        // 备份与还原：独立分组，不受「保存」影响（直接读写文件/网盘）
+        foldGroup('backup', t.form.groupBackup, [
+
+          h('div', { className: 'cnb2api-setting' },
+            h('div', { className: 'cnb2api-setting-main' },
+              h('label', { className: 'cnb2api-setting-label', htmlFor: 'cnb2api-backup-scope' }, t.form.backupScope),
+              h('span', { className: 'cnb2api-hint' }, t.form.backupMergeNote),
+            ),
+            h('select', {
+              id: 'cnb2api-backup-scope',
+              className: 'cnb2api-input cnb2api-input-host',
+              value: backupScope,
+              onChange: (event) => { setBackupScope(event.target.value); setBackupNote(null); },
+            },
+            h('option', { value: 'all' }, t.form.backupScopeAll),
+            h('option', { value: 'accounts' }, t.form.backupScopeAccounts),
+            h('option', { value: 'settings' }, t.form.backupScopeSettings))),
+
+          h('div', { className: 'cnb2api-setting' },
+            h('div', { className: 'cnb2api-setting-main' },
+              h('label', { className: 'cnb2api-setting-label', htmlFor: 'cnb2api-backup-pass' }, t.form.backupPassword),
+              h('span', { className: 'cnb2api-hint' }, t.form.backupPasswordHint),
+            ),
+            h('input', {
+              id: 'cnb2api-backup-pass',
+              className: 'cnb2api-input cnb2api-input-host',
+              type: 'password',
+              value: backupPassword,
+              autoComplete: 'new-password',
+              onChange: (event) => { setBackupPassword(event.target.value); setBackupNote(null); },
+            })),
+
+          h('div', { className: 'cnb2api-setting' },
+            h('div', { className: 'cnb2api-setting-main' },
+              h('span', { className: 'cnb2api-setting-label' }, t.form.backupLocal),
+            ),
+            h('div', { className: 'cnb2api-keyrow' },
+              h('button', {
+                type: 'button',
+                className: 'cnb2api-btn',
+                'data-v': 'outline',
+                disabled: !!backupBusy,
+                onClick: exportToFile,
+              }, backupBusy === 'export' ? t.form.backupWorking : t.form.backupExport),
+              h('label', {
+                className: 'cnb2api-btn',
+                'data-v': 'outline',
+                htmlFor: 'cnb2api-backup-file',
+                style: { display: 'inline-flex', alignItems: 'center', cursor: 'pointer' },
+              }, backupBusy === 'import' ? t.form.backupWorking : t.form.backupImport),
+              h('input', {
+                id: 'cnb2api-backup-file',
+                type: 'file',
+                accept: 'application/json,.json',
+                style: { display: 'none' },
+                onChange: importFromFile,
+              }))),
+
+          h('div', { className: 'cnb2api-setting cnb2api-setting-block' },
+            h('div', { className: 'cnb2api-setting-main' },
+              h('label', { className: 'cnb2api-setting-label', htmlFor: 'cnb2api-webdav-url' }, t.form.backupWebdav),
+              h('span', { className: 'cnb2api-hint' }, t.form.backupWebdavUrlHint),
+            ),
+            h('div', { className: 'cnb2api-stack' },
+              h('input', {
+                id: 'cnb2api-webdav-url',
+                className: 'cnb2api-input',
+                type: 'url',
+                value: general.webdavUrl || '',
+                placeholder: 'https://dav.example.com/backups/',
+                disabled: !writable,
+                spellCheck: false,
+                onChange: (event) => {
+                  setGeneral((prev) => ({ ...prev, webdavUrl: event.target.value }));
+                  setDirty(true); setNote(null);
+                },
+              }),
+              h('div', { className: 'cnb2api-row', style: { flexDirection: 'row', gap: '8px' } },
+                h('input', {
+                  'aria-label': t.form.backupWebdavUser,
+                  className: 'cnb2api-input',
+                  type: 'text',
+                  value: general.webdavUser || '',
+                  placeholder: t.form.backupWebdavUser,
+                  disabled: !writable,
+                  spellCheck: false,
+                  onChange: (event) => {
+                    setGeneral((prev) => ({ ...prev, webdavUser: event.target.value }));
+                    setDirty(true); setNote(null);
+                  },
+                }),
+                h('input', {
+                  'aria-label': t.form.backupWebdavPassword,
+                  className: 'cnb2api-input',
+                  type: 'password',
+                  value: general.webdavPassword || '',
+                  placeholder: t.form.backupWebdavPassword,
+                  autoComplete: 'new-password',
+                  disabled: !writable,
+                  onChange: (event) => {
+                    setGeneral((prev) => ({ ...prev, webdavPassword: event.target.value }));
+                    setDirty(true); setNote(null);
+                  },
+                })),
+              h('label', {
+                className: 'cnb2api-toggle-row',
+                style: { display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '12px' },
+              },
+                h('input', {
+                  type: 'checkbox',
+                  checked: general.autoBackup === true,
+                  disabled: !writable,
+                  onChange: (event) => {
+                    setGeneral((prev) => ({ ...prev, autoBackup: event.target.checked }));
+                    setDirty(true); setNote(null);
+                  },
+                }),
+                h('span', { className: 'cnb2api-setting-label' }, t.form.backupAuto),
+                h('span', { className: 'cnb2api-hint', style: { marginLeft: '2px' } }, t.form.backupAutoHint)),
+              h('div', { className: 'cnb2api-keyrow' },
+                h('button', {
+                  type: 'button',
+                  className: 'cnb2api-btn',
+                  'data-v': 'outline',
+                  disabled: !!backupBusy,
+                  onClick: uploadToWebdav,
+                }, backupBusy === 'upload' ? t.form.backupWorking : t.form.backupUpload),
+                h('button', {
+                  type: 'button',
+                  className: 'cnb2api-btn',
+                  'data-v': 'outline',
+                  disabled: !!backupBusy,
+                  onClick: downloadFromWebdav,
+                }, backupBusy === 'download' ? t.form.backupWorking : t.form.backupDownload)))),
+
+          // 备份操作自己的结果提示：与「保存」的 note 分开，避免相互覆盖
+          backupNote
+            ? h('p', { className: 'cnb2api-note', 'data-tone': backupNote.tone }, backupNote.text)
+            : null,
+        ]),
 
         // 全局设置底部也放一条保存栏：改完下面的设置就近保存，不用滚回顶部
         h('div', { className: 'cnb2api-foot' }, ...saveButtons('bottom')),

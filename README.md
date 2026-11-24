@@ -22,6 +22,7 @@
 | 工具 | `cnb2api_status` 看状态 · `cnb2api_start` 启动 · `cnb2api_quota` 查额度 |
 | 路由 | `GET /cnb2api/status` · `POST /cnb2api/start` |
 | 登录路由 | `POST /cnb2api/login/{token,orgs,repos,proxy-key}` —— 把令牌换成下拉选项、验证 PROXY_KEY |
+| 备份路由 | `POST /cnb2api/backup/{export,import,webdav}` —— 导出/导入账号与设置，可存本地或 WebDAV |
 | 界面 | **悬浮球**（可拖动、可关）+ **插件详情页**里的状态面板（含额度进度条）与配置表单 |
 
 界面不占对话区：**悬浮球**浮在窗口角落，详细的**状态面板**在
@@ -125,6 +126,9 @@
 | `creditFloorPercent` | 1 | 余额**保底线**（%），低于此值时**停止使用**该账号；0 表示不设保底 |
 | `lowCreditMessage` | 空 | 提示文案模板，留空用默认句子 |
 | `locale` | `auto` | 界面语言（auto 跟随浏览器）；工具输出 auto 用中文、显式 en 用英文 |
+| `webdavUrl` | 空 | WebDAV 备份目标（目录或完整路径）；只填目录会自动补 `cnb2api-backup.json` |
+| `webdavUser` / `webdavPassword` | 空 | WebDAV 账号；只存在本机 profile，**不随备份导出** |
+| `autoBackup` | `false` | 保存配置后自动上传备份到 WebDAV（还原仍需手动）|
 | `apiBase` | `https://api.cnb.cool` | CNB OpenAPI 基址（一般不用改，仅在 cordis.patch.yml 里） |
 
 ### 警戒线与保底线（两件事）
@@ -173,6 +177,21 @@
 
 同一句话也会写进网关响应头 `x-cnb2api-credit-notice`（percent-encoded，因为
 HTTP 头只能是 ASCII），供非 DSH 客户端读取。
+
+### 账号备份与还原
+
+配置页底部有「备份与还原」一栏，把账号和/或设置打包成一份 JSON，可存本地或 WebDAV。
+
+- **备份内容可选**：只账号、只设置、或两者。账号含 `token/repo/proxyKey/branch/port`；
+  设置含巡检、网关、警戒线/保底线、模型清单等。网关访问密钥 `gatewayKey` **不进备份**
+  （本机凭据，换机应重新生成）。
+- **默认口令加密**（AES-256-GCM，密钥由 scrypt 派生）。留空口令则导出明文 JSON ——
+  里面是完整令牌，注意文件存放。口令错了会明确报错，不会给出半份数据。
+- **还原是合并**：按仓库对齐，同仓库以备份为准、新仓库追加、现有其它账号保留。
+- **本地**：导出下载 `.json`，导入选文件。
+- **WebDAV**：填地址/账号/密码后可上传或下载并导入；请求由 Host 代发（WebDAV 普遍不带
+  CORS 头，浏览器直连会被拦）。勾选「保存后自动上传」则每次保存配置成功后静默推一份备份，
+  **还原始终手动**，不会自动覆盖本地账号。
 
 ### 配置页的组织方式
 
@@ -336,7 +355,7 @@ x-cnb2api-credit-low:    1        ← 低于警戒线
 ## 8. 开发
 
 ```bash
-npm test      # 231 个用例，按层分组
+npm test      # 249 个用例，按层分组
 ```
 
 代码按层分开，每层只依赖下一层：
