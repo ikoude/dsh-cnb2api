@@ -16,7 +16,7 @@ window.__ModuleLoader__.load({
   factory: (require) => {
     const React = require('react');
     const {
-      createElement: h, Fragment, useState, useEffect, useRef, useCallback,
+      createElement: h, Fragment, useState, useEffect, useRef,
     } = React;
 
     const PACKAGE = 'dsh-cnb2api';
@@ -759,33 +759,79 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
 
     // ---------------------------------------------------------------- panel
 
-    /** Poll the Host snapshot while the panel is mounted. */
+    /**
+     * 共享的状态快照源。
+     *
+     * 状态面板与悬浮球都要读这份快照。以前是各自 12s 拉一次、且**每次都带**
+     * `?probe=1` 强制推进一轮完整巡检 —— 用户设的 checkSeconds（默认 120s，
+     * 最小 30s）被实际压到 12s，账号多时持续打 CNB 接口。现在：
+     *   · 全局只有一个轮询器，订阅者共享同一次读取（两个组件不再各拉一份）；
+     *   · 周期轮询只读缓存快照（不带 probe），巡检节奏交回 checkSeconds；
+     *   · 只有「首次挂载 / 手动刷新 / 点启动」才带 probe，推进一次即时刷新。
+     */
+    function createSnapshotSource() {
+      const subscribers = new Set();
+      let view = { phase: 'loading', data: null, error: null };
+      let timer = null;
+      let inFlight = null;
+
+      const emit = () => {
+        for (const fn of subscribers) { try { fn(view); } catch { /* 单个订阅者出错不影响其它 */ } }
+      };
+
+      const read = (probe = false) => {
+        if (inFlight) return inFlight;
+        inFlight = (async () => {
+          try {
+            const response = await fetch(`/cnb2api/status${probe ? '?probe=1' : ''}`, {
+              headers: { accept: 'application/json' },
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            view = { phase: 'ready', data: await response.json(), error: null };
+          } catch (error) {
+            view = view.data
+              ? { phase: 'stale', data: view.data, error: String(error?.message || error) }
+              : { phase: 'error', data: null, error: String(error?.message || error) };
+          } finally {
+            inFlight = null;
+            emit();
+          }
+          return view;
+        })();
+        return inFlight;
+      };
+
+      const startTimer = () => {
+        if (timer || subscribers.size === 0) return;
+        timer = setInterval(() => { read(false); }, POLL_MS);
+        timer?.unref?.();
+      };
+      const stopTimer = () => { if (timer) { clearInterval(timer); timer = null; } };
+
+      return {
+        subscribe(fn) {
+          subscribers.add(fn);
+          fn(view);
+          startTimer();
+          // 第一个订阅者出现时补一次带 probe 的读取：推进首轮巡检与「设置 → 模型」接入
+          if (subscribers.size === 1) read(true);
+          return () => { subscribers.delete(fn); if (subscribers.size === 0) stopTimer(); };
+        },
+        read,
+        reload: () => read(true),
+        peek: () => view,
+      };
+    }
+    const snapshotSource = createSnapshotSource();
+
+    /** Subscribe to the shared snapshot while mounted; `enabled` gates polling. */
     function useSnapshot(enabled = true) {
-      const [view, setView] = useState({ phase: 'loading', data: null, error: null });
-
-      const read = useCallback(async () => {
-        try {
-          const response = await fetch('/cnb2api/status?probe=1', { headers: { accept: 'application/json' } });
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const data = await response.json();
-          setView({ phase: 'ready', data, error: null });
-        } catch (error) {
-          setView((prev) => (prev.data
-            ? { phase: 'stale', data: prev.data, error: String(error?.message || error) }
-            : { phase: 'error', data: null, error: String(error?.message || error) }));
-        }
-      }, []);
-
+      const [view, setView] = useState(() => snapshotSource.peek());
       useEffect(() => {
         if (!enabled) return undefined;
-        let live = true;
-        const tick = () => { if (live) read(); };
-        tick();
-        const timer = setInterval(tick, POLL_MS);
-        return () => { live = false; clearInterval(timer); };
-      }, [read, enabled]);
-
-      return { ...view, reload: read };
+        return snapshotSource.subscribe(setView);
+      }, [enabled]);
+      return { ...view, reload: snapshotSource.reload };
     }
 
     /**
@@ -1010,7 +1056,12 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
         try {
           // fetch only rejects on transport failure, so a quota refusal (409) must
           // be read from the body — otherwise the UI would claim success.
-          const response = await fetch(`/cnb2api/start?account=${encodeURIComponent(label)}`, { method: 'POST' });
+          const response = await fetch(`/cnb2api/start?account=${encodeURIComponent(label)}`, {
+            method: 'POST',
+            // 带 application/json：Host 用它挡住跨域盲发（CSRF）；内容为空即可
+            headers: { 'content-type': 'application/json' },
+            body: '{}',
+          });
           const body = await response.json().catch(() => ({}));
           if (!response.ok || body.ok === false) {
             setNote({ tone: 'error', text: `${t.panel.startFailed} · ${body.reason || `HTTP ${response.status}`}` });
@@ -2675,7 +2726,12 @@ select.cnb2api-input:disabled { cursor: not-allowed; color: var(--dsw-alias-labe
         setBusy(label);
         setNote(null);
         try {
-          const response = await fetch(`/cnb2api/start?account=${encodeURIComponent(label)}`, { method: 'POST' });
+          const response = await fetch(`/cnb2api/start?account=${encodeURIComponent(label)}`, {
+            method: 'POST',
+            // 带 application/json：Host 用它挡住跨域盲发（CSRF）；内容为空即可
+            headers: { 'content-type': 'application/json' },
+            body: '{}',
+          });
           const body = await response.json().catch(() => ({}));
           setNote(response.ok && body.ok !== false
             ? { tone: 'ok', text: t.panel.started }

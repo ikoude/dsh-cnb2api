@@ -13,7 +13,7 @@ import { classifyFailure, createGateway, isLoopbackHost, lanAddresses } from '..
  * @param {object} options - 行为开关。
  * @returns {Promise<{url: string, close: Function, hits: object[]}>} 上游。
  */
-async function upstreamServer({ models = ['deepseek-v4.1-flash'], status = 200 } = {}) {
+async function upstreamServer({ models = ['deepseek-v4.1-flash'], status = 200, gapMs = 80 } = {}) {
   const hits = [];
   const server = http.createServer((request, response) => {
     hits.push({ url: request.url, auth: request.headers.authorization, headers: { ...request.headers } });
@@ -34,7 +34,7 @@ async function upstreamServer({ models = ['deepseek-v4.1-flash'], status = 200 }
       response.write(`data: ${JSON.stringify({ choices: [{ delta: { content: 'B' } }] })}\n\n`);
       response.write('data: [DONE]\n\n');
       response.end();
-    }, 80);
+    }, gapMs);
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   return {
@@ -145,7 +145,9 @@ test('转发：客户端密钥不往上游带，上游拿工作区自己的 PROX
 
 test('流式：边收边发，不整体缓冲', async () => {
   // 整体缓冲会让流式输出变成「全生成完才一次性显示」，对话看起来像卡住。
-  const upstream = await upstreamServer();
+  // 上游两块间隔给到 200ms（默认 80ms 在整套测试并行、CPU 争用时可能被调度抖动挤压），
+  // 判据仍是「首块明显早于末块」，阈值 100ms 留足余量又不至于把缓冲漏掉。
+  const upstream = await upstreamServer({ gapMs: 200 });
   const gateway = await gatewayOn({ monitor: monitorStub(upstream.url) });
   try {
     const base = `http://127.0.0.1:${gateway.status().port}`;
@@ -167,10 +169,10 @@ test('流式：边收边发，不整体缓冲', async () => {
     }
     assert.ok(arrivals.length >= 2, `至少收到两个 SSE 事件，实际 ${arrivals.length}`);
     // 判据是「首块明显早于末块」，而不是固定阈值：整条链路只要不缓冲，
-    // 首块就会贴着 t=0 到达。上游两块的间隔是 80ms，首块若被缓冲会一起等，
-    // 两者的差就趋近于 0。实测正常值约 80ms+，留 40ms 的余量给慢机器。
+    // 首块就会贴着 t=0 到达。上游两块间隔 200ms，首块若被缓冲会一起等，
+    // 两者的差就趋近于 0。阈值 100ms 留足调度余量。
     assert.ok(
-      arrivals.at(-1).at - arrivals[0].at >= 40,
+      arrivals.at(-1).at - arrivals[0].at >= 100,
       `首块与末块几乎同时到达（${arrivals.at(-1).at - arrivals[0].at}ms），说明被整体缓冲了`,
     );
     assert.match(arrivals.at(-1).text, /\[DONE\]/);
@@ -680,5 +682,25 @@ test('响应头已发出后流中断：不再换账号重试（否则会写两�
     await gateway.stop();
     await new Promise((resolve) => half.close(resolve));
     await backup.close();
+  }
+});
+
+test('restart()：从未监听状态重启也能正常监听（不被上一轮 stop 的 wantStop 标记关掉）', async () => {
+  const gateway = createGateway({
+    pickMonitor: () => null,
+    getKey: () => 'sk-local',
+    getHost: () => '127.0.0.1',
+    getPort: () => 0,
+    log: () => {},
+  });
+  try {
+    // 先 stop 一次：模拟「当前未监听」并置起 wantStop（stop-during-start 的产物）。
+    // 旧实现里 restart() 不会清掉它，随后 listen 回调会立刻把刚建好的监听关掉。
+    await gateway.stop();
+    await gateway.restart();
+    assert.equal(gateway.status().listening, true, 'restart 后必须处于监听状态');
+    assert.ok(gateway.status().port > 0, 'restart 后应拿到真实端口');
+  } finally {
+    await gateway.stop();
   }
 });

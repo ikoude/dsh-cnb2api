@@ -5,6 +5,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import net from 'node:net';
 import * as plugin from '../lib/index.mjs';
 
 /** A CNB backend good enough to drive one account through a sync. */
@@ -44,7 +45,9 @@ function mount(initial) {
   const config = {};
   // gatewayPort: 0 让内核分配端口，测试之间不会抢固定端口
   for (const key of ['accounts', 'apiBase', 'branch', 'port', 'checkSeconds', 'autoStart', 'locale', 'models',
-    'gatewayHost', 'gatewayPort', 'gatewayKey', 'autoPublish']) {
+    'gatewayHost', 'gatewayPort', 'gatewayKey', 'autoPublish',
+    'lowCreditPercent', 'creditFloorPercent', 'lowCreditMessage',
+    'webdavUrl', 'webdavUser', 'webdavPassword', 'autoBackup']) {
     Object.defineProperty(config, key, { get: () => parsed[key], enumerable: true });
   }
   const routes = [];
@@ -95,9 +98,9 @@ function mount(initial) {
 const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
 /** Call an exact-path route and resolve its JSON body. */
-function call(route, { url = '/', method = 'GET' } = {}) {
+function call(route, { url = '/', method = 'GET', headers = {} } = {}) {
   return new Promise((resolve) => {
-    route.handler({ url, method, headers: {}, [Symbol.asyncIterator]: async function* iterate() {} }, {
+    route.handler({ url, method, headers, [Symbol.asyncIterator]: async function* iterate() {} }, {
       writeHead() {},
       end(text) { resolve(text ? JSON.parse(text) : null); },
     });
@@ -188,7 +191,11 @@ test('启动接口：POST 才受理，额度用尽时 409', async () => {
   assert.equal(get.ok, false);
   assert.equal(get.reason, 'method');
 
-  const post = await call(host.route('/cnb2api/start'), { method: 'POST', url: '/cnb2api/start?account=acme/gateway' });
+  const post = await call(host.route('/cnb2api/start'), {
+    method: 'POST',
+    url: '/cnb2api/start?account=acme/gateway',
+    headers: { 'content-type': 'application/json' },
+  });
   assert.equal(post.ok, false, '额度用尽应被拦住');
   assert.match(post.reason, /已用尽/, '要说清是额度问题，而不是笼统的「已停止」');
   assert.deepEqual(net.started, [], '不该提交启动');
@@ -303,10 +310,10 @@ test('工具输出语言跟随 locale：auto 中文、en 英文', async () => {
   }
 });
 
-test('备份路由要求 application/json：挡住 text/plain 的跨域盲发', async () => {
+test('写操作路由要求 application/json：挡住 text/plain 的跨域盲发（含 /start）', async () => {
   globalThis.fetch = backend().impl;
   const host = mount({ accounts: [] });
-  for (const path of ['/cnb2api/backup/export', '/cnb2api/backup/import', '/cnb2api/backup/webdav']) {
+  for (const path of ['/cnb2api/backup/export', '/cnb2api/backup/import', '/cnb2api/backup/webdav', '/cnb2api/start']) {
     const route = host.route(path);
     const reply = await new Promise((resolve) => {
       route.handler({
@@ -318,5 +325,50 @@ test('备份路由要求 application/json：挡住 text/plain 的跨域盲发', 
     assert.equal(reply.code, 415, `${path} 该拒绝 text/plain`);
     assert.match(reply.body.reason, /application\/json/);
   }
+  host.dispose();
+});
+
+test('热更新：首次修改监听端口就重启网关（lastTarget 基线不被吞掉）', async () => {
+  globalThis.fetch = backend().impl;
+  const host = mount({ accounts: [], gatewayHost: '127.0.0.1', gatewayPort: 0 });
+  try {
+    // 等网关真正监听，记下当前端口
+    let p1 = 0;
+    for (let i = 0; i < 100; i += 1) {
+      const body = await call(host.route('/cnb2api/status'));
+      if (body.gateway?.listening) { p1 = body.gateway.port; break; }
+      await wait(20);
+    }
+    assert.ok(p1 > 0, '网关应已监听');
+
+    // 借一个空闲端口作为新端口（绑定后立刻释放，交给网关再绑）
+    const srv = net.createServer();
+    const p2 = await new Promise((resolve) => srv.listen(0, '127.0.0.1', () => {
+      const port = srv.address().port;
+      srv.close(() => resolve(port));
+    }));
+    assert.notEqual(p2, p1);
+
+    // 第一次修改端口就必须触发重启（旧实现把首次变更当基线、不重启）
+    host.set({ accounts: [], gatewayHost: '127.0.0.1', gatewayPort: p2, autoPublish: false });
+    let port = 0;
+    for (let i = 0; i < 120; i += 1) {
+      const body = await call(host.route('/cnb2api/status'));
+      port = body.gateway?.port;
+      if (body.gateway?.listening && port === p2) break;
+      await wait(30);
+    }
+    assert.equal(port, p2, `首次改端口就应生效，实际仍在 ${port}`);
+  } finally {
+    host.dispose();
+  }
+});
+
+test('设置：警戒线/保底线为 0 时如实保留（0 是合法值，不被兜底吞掉）', async () => {
+  globalThis.fetch = backend().impl;
+  const host = mount({ accounts: [], lowCreditPercent: 0, creditFloorPercent: 0 });
+  const body = await call(host.route('/cnb2api/status'));
+  assert.equal(body.lowCreditPercent, 0, 'lowCreditPercent=0 不该被兜底成 5');
+  assert.equal(body.creditFloorPercent, 0, 'creditFloorPercent=0 不该被兜底成 1');
   host.dispose();
 });

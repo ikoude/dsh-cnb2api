@@ -1421,3 +1421,18 @@ test('分组折叠不影响字段渲染：所有表单控件仍在（折叠只�
   const missing = expected.filter((id) => !ids.has(id));
   assert.deepEqual(missing, [], `折叠后仍应渲染全部控件，缺：${missing.join(',')}`);
 });
+
+test('轮询收敛：共享单轮询，周期只读快照，仅首挂/刷新才 probe', () => {
+  const source = fs.readFileSync(BUNDLE, 'utf8');
+  // 只有一个共享快照源：状态面板与悬浮球不再各拉一份、各自 12s 轮询。
+  assert.match(source, /function createSnapshotSource\(\)/, '应有共享快照源');
+  assert.match(source, /const snapshotSource = createSnapshotSource\(\);/, '快照源应是模块级单例');
+  assert.match(source, /snapshotSource\.subscribe/, 'useSnapshot 必须订阅共享源');
+  // 不能再有写死 probe 的状态请求：以前每 12s 一次会把 checkSeconds 压成 12s。
+  assert.equal(source.includes("'/cnb2api/status?probe=1'"), false, '不应再有写死的 probe 轮询');
+  // 周期定时器只读缓存快照（read(false)），不带 probe。
+  const timerBlock = source.slice(source.indexOf('const startTimer ='), source.indexOf('const stopTimer ='));
+  assert.match(timerBlock, /read\(false\)/, '周期轮询不能带 probe');
+  // probe 只在首个订阅者出现（挂载）时补一次。
+  assert.match(source, /if \(subscribers\.size === 1\) read\(true\)/, '首个订阅者才补一次 probe');
+});

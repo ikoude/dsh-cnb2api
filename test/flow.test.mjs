@@ -252,7 +252,7 @@ test('端到端：低于保底线时点「启动」立刻被拒，不挂在 90 �
     const started = Date.now();
     const body = await new Promise((resolve) => {
       host.route('/cnb2api/start').handler(
-        { url: '/cnb2api/start?account=acme/gateway', method: 'POST', headers: {}, [Symbol.asyncIterator]: async function* () {} },
+        { url: '/cnb2api/start?account=acme/gateway', method: 'POST', headers: { 'content-type': 'application/json' }, [Symbol.asyncIterator]: async function* () {} },
         { writeHead() {}, end(t) { resolve(t ? JSON.parse(t) : null); } },
       );
     });

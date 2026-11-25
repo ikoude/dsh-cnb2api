@@ -20,7 +20,7 @@
 | 供应商 | 自动写入 **设置 → 模型** 的 **CNB2API**（路由 `cnb-gateway`），选中即可对话 |
 | 网关 | 固定基址 `http://127.0.0.1:41729/v1`（可改），地址漂移与账号切换藏在后面 |
 | 工具 | `cnb2api_status` 看状态 · `cnb2api_start` 启动 · `cnb2api_quota` 查额度 |
-| 路由 | `GET /cnb2api/status` · `POST /cnb2api/start` |
+| 路由 | `GET /cnb2api/status` · `POST /cnb2api/start`（需 `Content-Type: application/json`） |
 | 登录路由 | `POST /cnb2api/login/{token,orgs,repos,proxy-key}` —— 把令牌换成下拉选项、验证 PROXY_KEY |
 | 备份路由 | `POST /cnb2api/backup/{export,import,webdav}` —— 导出/导入账号与设置，可存本地或 WebDAV |
 | 界面 | **悬浮球**（可拖动、可关）+ **插件详情页**里的状态面板（含额度进度条）与配置表单 |
